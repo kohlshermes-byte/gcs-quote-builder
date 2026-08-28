@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GCS Conveyor Quote Builder</title>
+<style>
+  :root{
+    --red:#CC0000; --red-dark:#aa0000; --ink:#111111; --panel:#1b1a18; --panel-2:#222120;
+    --line:#34322f; --muted:#8d8881; --text:#ece9e4; --field:#2a2825; --field-focus:#322f2b;
+    --ok:#2d6a4f; --warn:#b8860b; --bad:#9b2226;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:Arial,sans-serif;background:#11100F;color:var(--text);overflow:hidden}
+  .topbar{height:58px;background:var(--ink);border-bottom:2px solid var(--red);display:flex;align-items:center;gap:14px;padding:0 20px}
+  .brand b{font-size:14px;letter-spacing:.06em}
+  .brand small{display:block;font-size:10px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+  .spacer{flex:1}
+  .tb-btn{background:transparent;border:1px solid var(--line);color:var(--text);padding:8px 14px;border-radius:4px;font-size:12px;cursor:pointer}
+  .tb-btn:hover{border-color:var(--muted)}
+  .tb-btn.primary{background:var(--red);border-color:var(--red);color:#fff;font-weight:bold}
+  .tb-btn.primary:hover{background:var(--red-dark)}
+  .tb-btn:disabled{opacity:.45;cursor:not-allowed}
+  .stage{display:flex;height:calc(100vh - 58px)}
+  .editor{width:44%;min-width:400px;max-width:640px;overflow-y:auto;background:var(--panel);border-right:1px solid var(--line);padding:20px 22px 80px}
+  .preview-pane{flex:1;background:#2c2a28;display:flex;flex-direction:column;padding:20px}
+  .preview-pane iframe{flex:1;width:100%;border:none;background:#E8E8E8;border-radius:4px}
+  .preview-placeholder{color:var(--muted);display:flex;align-items:center;justify-content:center;height:100%;font-size:14px;text-align:center;padding:40px}
+  .grp{margin-bottom:20px}
+  .grp-head{font-size:10px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .grp-head::before{content:"";width:3px;height:12px;background:var(--red)}
+  .row{display:flex;gap:10px;margin-bottom:10px}
+  .fld{flex:1;min-width:0}
+  label{display:block;font-size:10px;font-weight:bold;color:var(--muted);margin-bottom:4px;letter-spacing:.06em;text-transform:uppercase}
+  input,textarea{width:100%;background:var(--field);border:1px solid transparent;border-radius:4px;color:var(--text);font-size:13px;padding:8px 10px;font-family:inherit}
+  input:focus,textarea:focus{outline:none;border-color:var(--red);background:var(--field-focus)}
+  input[readonly]{color:var(--muted);cursor:default}
+  input.placeholder-text{color:var(--muted)}
+  textarea{resize:vertical;min-height:60px;line-height:1.45}
+  .hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .status-bar{font-size:11px;color:var(--muted);margin-top:8px;min-height:18px}
+  .status-bar.error{color:#f4a3a8}
+  .status-bar.ok{color:#95d5b2}
+  .review-grid{display:flex;flex-direction:column;gap:8px}
+  .review-field label{display:flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .dot.ok{background:#52b788}
+  .dot.warn{background:#ffd166}
+  .dot.missing{background:#e63946}
+  .line-item-card{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:12px;margin-bottom:10px}
+  .line-item-card h4{font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;padding:10px 18px;border-radius:6px;font-size:13px;opacity:0;transition:.25s;z-index:99;border:1px solid var(--line)}
+  #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .api-warn{background:#3d2c00;border:1px solid #665500;color:#ffd166;padding:10px 12px;border-radius:4px;font-size:12px;margin-bottom:16px}
+  .loading{opacity:.6;pointer-events:none}
+
+  /* jobs drawer */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:none}
+  .overlay.show{display:block}
+  .drawer{
+    position:fixed;top:0;right:0;height:100%;width:460px;max-width:92vw;background:var(--panel);
+    z-index:21;transform:translateX(100%);transition:transform .25s ease;
+    display:flex;flex-direction:column;border-left:1px solid var(--line);
+  }
+  .drawer.show{transform:translateX(0)}
+  .drawer-head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .drawer-head h2{font-size:14px;font-weight:700}
+  .drawer-head .x{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer}
+  .search{padding:12px 18px;border-bottom:1px solid var(--line)}
+  .search input{background:var(--field)}
+  .jobs-list{flex:1;overflow-y:auto;padding:10px 14px}
+  .job{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:8px;cursor:pointer;position:relative}
+  .job:hover{border-color:var(--red)}
+  .job .co{font-size:13px;font-weight:bold;margin-bottom:2px}
+  .job .mc{font-size:11px;color:var(--muted);margin-bottom:4px}
+  .job .meta{font-size:10px;color:var(--muted);display:flex;justify-content:space-between}
+  .job .tot{color:#ffd166;font-weight:bold}
+  .job-actions{position:absolute;top:8px;right:8px;display:flex;gap:4px;opacity:0}
+  .job:hover .job-actions{opacity:1}
+  .ja{width:24px;height:24px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer;border-radius:4px;font-size:11px}
+  .ja:hover{border-color:var(--red);color:var(--red)}
+  .empty{text-align:center;color:var(--muted);padding:40px 16px;font-size:13px;line-height:1.5}
+  .toggle-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13px;cursor:pointer}
+  .toggle-row input{width:auto;accent-color:var(--red)}
+  .case2-note{font-size:11px;color:#ffd166;margin-top:8px;line-height:1.4;display:none}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">
+    <b>GCS <span style="color:var(--red)">Conveyor</span> Quote Builder</b>
+    <small>Stage 1 Intake · Firecrawl Extract · Stage 2 Quote</small>
+  </div>
+  <div class="spacer"></div>
+  <button class="tb-btn" id="btnNew">New</button>
+  <button class="tb-btn" id="btnJobs">Saved Quotes</button>
+  <button class="tb-btn" id="btnSave">Save Draft</button>
+  <button class="tb-btn primary" id="btnBuild">Build Quote</button>
+  <button class="tb-btn primary" id="btnSavePdf" disabled>Save PDF</button>
+  <button class="tb-btn primary" id="btnSaveScreenshot" disabled>Save Screenshot</button>
+</div>
+
+<div class="stage">
+  <div class="editor" id="editor">
+    <div id="apiWarn" class="api-warn" style="display:none"></div>
+
+    <div class="grp">
+      <div class="grp-head">Source URLs</div>
+      <label class="toggle-row">
+        <input type="checkbox" id="customAddonsRequired">
+        <span>Custom add-ons required (new build)</span>
+      </label>
+      <div class="fld"><label>Conveyor Listing URL *</label><input id="urlListing" type="url" placeholder="https://www.grindercrusherscreen.com/listings/..."></div>
+      <div class="fld" id="pasteAddonsRow" style="display:none;margin-bottom:10px">
+        <label><span class="dot missing" id="stAddons"></span>Paste Custom Add-Ons</label>
+        <textarea id="pasteCustomAddons" rows="5" placeholder="Paste the custom add-ons / configured options from your Request a Quote page"></textarea>
+      </div>
+      <p class="hint" id="urlHint">Standard listing (new or used): paste the GCS listing URL only. All equipment sections are pulled from that page.</p>
+      <p class="case2-note" id="case2Note">Custom build: paste the listing URL, then copy the configured options from your Request a Quote page into Paste Custom Add-Ons below. Quote cart data is stored in your browser, not in the URL.</p>
+      <div class="actions">
+        <button class="tb-btn primary" id="btnExtract">Extract Data</button>
+        <button class="tb-btn" id="btnReextract" disabled>Re-extract</button>
+      </div>
+      <div class="status-bar" id="extractStatus"></div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">Quote Details</div>
+      <div class="row">
+        <div class="fld"><label>Quote Number</label><input id="quoteNum"></div>
+        <div class="fld"><label>Quote Date</label><input id="quoteDate"></div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">Customer</div>
+      <div class="fld"><label>Company</label><input id="custCompany"></div>
+      <div class="row">
+        <div class="fld"><label>Contact</label><input id="custContact"></div>
+        <div class="fld"><label>Phone</label><input id="custPhone"></div>
+      </div>
+      <div class="fld"><label>Email</label><input id="custEmail"></div>
+      <div class="fld"><label>Street</label><input id="custStreet"></div>
+      <div class="row">
+        <div class="fld"><label>City</label><input id="custCity"></div>
+        <div class="fld"><label>State</label><input id="custState"></div>
+      </div>
+      <div class="row">
+        <div class="fld"><label>ZIP</label><input id="custZip"></div>
+        <div class="fld"><label>Country</label><input id="custCountry"></div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">Prepared By</div>
+      <div class="fld"><label>Name</label><input id="repName"></div>
+      <div class="row">
+        <div class="fld"><label>Email</label><input id="repEmail"></div>
+        <div class="fld"><label>Phone</label><input id="repPhone"></div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">Review Extracted Data</div>
+      <div class="line-item-card">
+        <h4>Line Item</h4>
+        <div class="review-grid">
+          <div class="review-field fld"><label><span class="dot missing" id="stModel"></span>Model / SKU</label><input id="liModel"></div>
+          <div class="review-field fld"><label><span class="dot missing" id="stDesc"></span>Description</label><textarea id="liDesc"></textarea></div>
+          <div class="row">
+            <div class="review-field fld"><label><span class="dot missing" id="stAmount"></span>Amount</label><input id="liAmount"></div>
+            <div class="review-field fld"><label><span class="dot missing" id="stLead"></span>Lead Time</label><input id="liLead"></div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="fld"><label>Subtotal</label><input id="totSub"></div>
+        <div class="fld"><label>Freight</label><input id="totFreight"></div>
+        <div class="fld"><label>Tax</label><input id="totTax"></div>
+        <div class="fld"><label>Total</label><input id="totGrand" readonly placeholder="Calculated"></div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">Detailed Equipment Information</div>
+      <div class="fld"><label><span class="dot missing" id="stEqName"></span>Equipment Name</label><input id="eqName"></div>
+      <div class="fld"><label><span class="dot missing" id="stEqDesc"></span>Description</label><textarea id="eqDesc" rows="3"></textarea></div>
+      <div class="fld"><label><span class="dot missing" id="stFrame"></span>Frame (one item per line)</label><textarea id="eqFrame" rows="3"></textarea></div>
+      <div class="fld"><label><span class="dot missing" id="stIdlers"></span>Idlers</label><textarea id="eqIdlers" rows="2"></textarea></div>
+      <div class="fld"><label><span class="dot missing" id="stUndercarriage"></span>Undercarriage</label><textarea id="eqUndercarriage" rows="3"></textarea></div>
+      <div class="fld"><label><span class="dot missing" id="stBelt"></span>Belt</label><textarea id="eqBelt" rows="3"></textarea></div>
+      <div class="fld" id="eqTravelRow"><label><span class="dot missing" id="stTravel"></span>Travel</label><input id="eqTravel" placeholder="Road Portable"></div>
+      <div class="fld" id="eqRoadPortableRow" style="display:none"><label><span class="dot missing" id="stRoadPortable"></span>Road Portable Option</label><input id="eqRoadPortable" placeholder="Telescopic Military Pintle"></div>
+      <div class="fld"><label><span class="dot missing" id="stPower"></span>Power</label><textarea id="eqPower" rows="2"></textarea></div>
+      <div class="fld"><label><span class="dot missing" id="stOther"></span>Other (one item per line)</label><textarea id="eqOther" rows="4"></textarea></div>
+      <div class="fld"><label><span class="dot missing" id="stAssembly"></span>Assembly</label><input id="eqAssembly"></div>
+      <div class="fld" id="eqSpecsRow"><label><span class="dot missing" id="stSpecs"></span>Specifications (Label | Value per line)</label><textarea id="eqSpecs" rows="6" placeholder="Stock Number | GCS242304-1"></textarea></div>
+      <div class="fld"><label>Image URL</label><input id="eqImage"></div>
+    </div>
+  </div>
+
+  <div class="preview-pane">
+    <iframe id="previewFrame" style="display:none" title="Quote preview"></iframe>
+    <div class="preview-placeholder" id="previewPlaceholder">Extract data and click <strong>Build Quote</strong> to preview the filled conveyor template.</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h2>Saved Conveyor Quotes</h2>
+    <button class="x" id="closeDrawer">×</button>
+  </div>
+  <div class="search"><input id="jobSearch" placeholder="Search by company or model…"></div>
+  <div class="jobs-list" id="jobsList"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+function money(n){
+  const v = parseFloat(String(n||0).replace(/[$,]/g,'')) || 0;
+  return '$' + v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function parseMoney(raw){
+  const s = String(raw || '').replace(/[$,\s]/g, '').trim();
+  if(!s) return 0;
+  const v = parseFloat(s);
+  return Number.isFinite(v) ? v : 0;
+}
+
+function formatComponentMoney(raw){
+  const s = String(raw || '').replace(/[$,\s]/g, '').trim();
+  if(!s) return '';
+  const v = parseFloat(s);
+  if(!Number.isFinite(v)) return String(raw || '').trim();
+  if(Math.abs(v - Math.round(v)) < 0.000001){
+    return '$' + Math.round(v).toLocaleString('en-US');
+  }
+  return '$' + v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function formatTotalMoney(raw){
+  const s = String(raw || '').replace(/[$,\s]/g, '').trim();
+  if(!s) return '';
+  const v = parseFloat(s);
+  if(!Number.isFinite(v)) return String(raw || '').trim();
+  return '$' + v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function applyTotalsOnBuild(){
+  const subEl = $('totSub');
+  const amountEl = $('liAmount');
+  let subRaw = '';
+  if(isCustomBuild()){
+    subRaw = readCustomPriceField(subEl) || readCustomPriceField(amountEl);
+    if(subRaw){
+      const subFmt = formatComponentMoney(subRaw);
+      amountEl.classList.remove('placeholder-text');
+      subEl.classList.remove('placeholder-text');
+      amountEl.value = subFmt;
+      subEl.value = subFmt;
+      subRaw = subFmt;
+    }
+  } else {
+    subRaw = subEl.value.trim();
+  }
+  const frEl = $('totFreight');
+  const taxEl = $('totTax');
+  const frPlaceholder = frEl.classList.contains('placeholder-text');
+  const taxPlaceholder = taxEl.classList.contains('placeholder-text');
+  const sub = parseMoney(subRaw);
+  const fr = frPlaceholder ? 0 : parseMoney(frEl.value.trim());
+  const tax = taxPlaceholder ? 0 : parseMoney(taxEl.value.trim());
+  const subFmt = subRaw ? formatComponentMoney(subRaw) : '';
+  if(!frPlaceholder && frEl.value.trim()){
+    frEl.classList.remove('placeholder-text');
+    frEl.value = formatComponentMoney(frEl.value.trim());
+  }
+  if(!taxPlaceholder && taxEl.value.trim()){
+    taxEl.classList.remove('placeholder-text');
+    taxEl.value = formatComponentMoney(taxEl.value.trim());
+  }
+  const frFmt = readMoneyPlaceholderField(frEl, '$0');
+  const taxFmt = readMoneyPlaceholderField(taxEl, '$0');
+  const grand = sub + fr + tax;
+  const grandFmt = (subRaw || !frPlaceholder || !taxPlaceholder) ? formatTotalMoney(String(grand)) : '';
+  if(!isCustomBuild()) subEl.value = subFmt;
+  $('totGrand').value = grandFmt;
+  return {subtotal: subFmt, freight: frFmt, tax: taxFmt, grand_total: grandFmt};
+}
+
+function formatLineAmountOnBuild(){
+  if(isCustomBuild()) return;
+  const raw = $('liAmount').value.trim();
+  if(!raw) return;
+  $('liAmount').value = formatComponentMoney(raw);
+}
+
+function escapeHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+let allJobs = [];
+let state = {};
+let currentId = null;
+let urlsChanged = false;
+let fillingForm = false;
+let syncingCustomPrice = false;
+const CUSTOM_PRICE_PLACEHOLDER = 'Enter Custom Price';
+
+function isCustomBuild(){
+  return $('customAddonsRequired').checked;
+}
+
+function hasCustomPriceValue(val){
+  const text = String(val || '').trim();
+  if(!text || text === CUSTOM_PRICE_PLACEHOLDER) return false;
+  return parseMoney(text) > 0;
+}
+
+function readCustomPriceField(el){
+  if(!el || el.classList.contains('placeholder-text')) return '';
+  return el.value.trim();
+}
+
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+function todayQuoteNum(){
+  const d = new Date();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `GCS-${m}${day}${d.getFullYear()}`;
+}
+
+function todayDate(){
+  return new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+}
+
+function setDot(id, status){
+  const el = $(id);
+  if(!el) return;
+  el.className = 'dot ' + (status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : 'missing');
+}
+
+function parseSpecs(text){
+  return (text||'').split('\n').map(ln=>{
+    const parts = ln.split('|');
+    if(parts.length < 2) return null;
+    const label = parts[0].trim();
+    const value = parts.slice(1).join('|').trim();
+    return label && value ? {label, value} : null;
+  }).filter(Boolean);
+}
+
+function specsToText(specs){
+  return (specs||[]).map(s=>`${s.label} | ${s.value}`).join('\n');
+}
+
+function bulletsToText(arr){
+  return (arr||[]).join('\n');
+}
+
+function textToBullets(text){
+  return (text||'').split('\n').map(s=>s.trim()).filter(Boolean);
+}
+
+function syncCustomAddonsUI(){
+  const on = $('customAddonsRequired').checked;
+  $('pasteAddonsRow').style.display = on ? 'block' : 'none';
+  $('case2Note').style.display = on ? 'block' : 'none';
+  $('eqSpecsRow').style.display = on ? 'none' : 'block';
+  $('eqTravelRow').style.display = on ? 'block' : 'none';
+  $('urlHint').textContent = on
+    ? 'Custom build: listing URL for equipment details, plus paste configured add-ons from your quote cart.'
+    : 'Standard listing (new or used): paste the GCS listing URL only. All equipment sections are pulled from that page.';
+  if(!on) $('pasteCustomAddons').value = '';
+  if(!on){
+    ['liAmount', 'totSub'].forEach(id=>{
+      const el = $(id);
+      if(el.classList.contains('placeholder-text')){
+        el.value = '';
+        el.classList.remove('placeholder-text');
+      }
+    });
+  }
+  syncRoadPortableUI();
+  updateAddonsStatus();
+}
+
+function resetCustomPriceFields(){
+  resetPlaceholderField($('liAmount'), CUSTOM_PRICE_PLACEHOLDER);
+  resetPlaceholderField($('totSub'), CUSTOM_PRICE_PLACEHOLDER);
+  setDot('stAmount', 'missing');
+}
+
+function fillCustomPriceFields(amountVal, subtotalVal){
+  const amountEl = $('liAmount');
+  const subEl = $('totSub');
+  if(!isCustomBuild()){
+    amountEl.classList.remove('placeholder-text');
+    subEl.classList.remove('placeholder-text');
+    amountEl.value = amountVal || '';
+    subEl.value = subtotalVal || '';
+    return;
+  }
+  const price = hasCustomPriceValue(subtotalVal) ? subtotalVal
+    : hasCustomPriceValue(amountVal) ? amountVal : '';
+  if(price){
+    amountEl.classList.remove('placeholder-text');
+    subEl.classList.remove('placeholder-text');
+    amountEl.value = price;
+    subEl.value = price;
+    setDot('stAmount', 'ok');
+  } else {
+    resetCustomPriceFields();
+  }
+}
+
+function updateCustomPriceStatus(){
+  if(!isCustomBuild()) return;
+  const val = readCustomPriceField($('liAmount')) || readCustomPriceField($('totSub'));
+  setDot('stAmount', hasCustomPriceValue(val) ? 'ok' : 'missing');
+}
+
+function syncCustomPriceFromAmount(){
+  if(!isCustomBuild() || syncingCustomPrice) return;
+  const el = $('liAmount');
+  if(el.classList.contains('placeholder-text')) return;
+  syncingCustomPrice = true;
+  const subEl = $('totSub');
+  subEl.classList.remove('placeholder-text');
+  subEl.value = el.value;
+  syncingCustomPrice = false;
+  updateCustomPriceStatus();
+}
+
+function syncCustomPriceFromSubtotal(){
+  if(!isCustomBuild() || syncingCustomPrice) return;
+  const el = $('totSub');
+  if(el.classList.contains('placeholder-text')) return;
+  syncingCustomPrice = true;
+  const amountEl = $('liAmount');
+  amountEl.classList.remove('placeholder-text');
+  amountEl.value = el.value;
+  syncingCustomPrice = false;
+  updateCustomPriceStatus();
+}
+
+function bindCustomPriceField(id, syncFn){
+  const el = $(id);
+  if(!el || el.dataset.customPriceBound) return;
+  el.dataset.customPriceBound = '1';
+  el.addEventListener('focus', ()=>{
+    if(!isCustomBuild()) return;
+    if(el.classList.contains('placeholder-text')){
+      el.value = '';
+      el.classList.remove('placeholder-text');
+    }
+  });
+  el.addEventListener('input', ()=>{
+    if(!isCustomBuild() || syncingCustomPrice || el.classList.contains('placeholder-text')) return;
+    syncFn();
+  });
+  el.addEventListener('blur', ()=>{
+    if(!isCustomBuild()) return;
+    if(!el.value.trim() || !hasCustomPriceValue(el.value)){
+      resetCustomPriceFields();
+      return;
+    }
+    syncFn();
+    const formatted = formatComponentMoney(el.value.trim());
+    if(formatted){
+      $('liAmount').classList.remove('placeholder-text');
+      $('totSub').classList.remove('placeholder-text');
+      $('liAmount').value = formatted;
+      $('totSub').value = formatted;
+    }
+    updateCustomPriceStatus();
+  });
+}
+
+function syncRoadPortableUI(){
+  const on = $('customAddonsRequired').checked;
+  if(!on){
+    $('eqRoadPortableRow').style.display = 'none';
+    return;
+  }
+  const travel = $('eqTravel').value.trim().toLowerCase();
+  const show = travel.includes('road portable');
+  $('eqRoadPortableRow').style.display = show ? 'block' : 'none';
+  if(!show) $('eqRoadPortable').value = '';
+}
+
+function resetPlaceholderField(el, placeholder){
+  if(!el) return;
+  el.dataset.placeholder = placeholder;
+  el.value = placeholder;
+  el.classList.add('placeholder-text');
+}
+
+function readOptionalPlaceholderField(el){
+  if(!el || el.classList.contains('placeholder-text')) return '';
+  return el.value.trim();
+}
+
+function readMoneyPlaceholderField(el, placeholderVal){
+  if(!el || el.classList.contains('placeholder-text')) return placeholderVal;
+  const v = el.value.trim();
+  return v || placeholderVal;
+}
+
+function readLeadTimeField(){
+  const el = $('liLead');
+  if(el.classList.contains('placeholder-text')) return 'In Stock';
+  return el.value.trim() || 'In Stock';
+}
+
+function bindPlaceholderField(id){
+  const el = $(id);
+  if(!el || el.dataset.placeholderBound) return;
+  el.dataset.placeholderBound = '1';
+  el.addEventListener('focus', ()=>{
+    if(el.classList.contains('placeholder-text')){
+      el.value = '';
+      el.classList.remove('placeholder-text');
+    }
+  });
+  el.addEventListener('blur', ()=>{
+    if(!el.value.trim()){
+      resetPlaceholderField(el, el.dataset.placeholder || '');
+    }
+  });
+}
+
+function fillCustomerFields(c){
+  c = c || {};
+  $('custStreet').value = c.street || '';
+  $('custCity').value = c.city || '';
+  $('custState').value = c.state || '';
+  $('custZip').value = c.zip || '';
+  if(!c.street && !c.city && !c.state && !c.zip && c.address){
+    $('custStreet').value = c.address;
+  }
+  if(c.country){
+    $('custCountry').classList.remove('placeholder-text');
+    $('custCountry').value = c.country;
+  } else {
+    resetPlaceholderField($('custCountry'), 'USA');
+  }
+}
+
+const STREET_ABBREVS = {
+  rd: 'Rd', road: 'Road', st: 'St', street: 'Street',
+  ave: 'Ave', avenue: 'Avenue', blvd: 'Blvd', dr: 'Dr',
+  drive: 'Drive', ln: 'Ln', lane: 'Lane', ct: 'Ct',
+  court: 'Court', hwy: 'Hwy', pkwy: 'Pkwy', pl: 'Pl',
+  way: 'Way', cir: 'Cir', trl: 'Trl', loop: 'Loop',
+};
+const DIRECTIONS = new Set(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']);
+
+function capWord(word){
+  if(!word) return word;
+  return word[0].toUpperCase() + word.slice(1).toLowerCase();
+}
+
+function formatAddressWord(word, street=false){
+  let base = word;
+  let punct = '';
+  while(base && !/[A-Za-z0-9]/.test(base[base.length - 1])){
+    punct = base[base.length - 1] + punct;
+    base = base.slice(0, -1);
+  }
+  if(!base) return word;
+  const low = base.toLowerCase();
+  if(/^\d/.test(base)) return word;
+  if(street && DIRECTIONS.has(low)) return low.toUpperCase() + punct;
+  if(street && STREET_ABBREVS[low]) return STREET_ABBREVS[low] + punct;
+  if(base.includes('-')) return base.split('-').map(capWord).join('-') + punct;
+  return capWord(base) + punct;
+}
+
+function formatStreetAddress(text){
+  text = (text || '').trim();
+  if(!text) return '';
+  return text.split(/\s+/).map(word => formatAddressWord(word, true)).join(' ');
+}
+
+function formatCityAddress(text){
+  text = (text || '').trim();
+  if(!text) return '';
+  return text.split(/\s+/).map(word => formatAddressWord(word, false)).join(' ');
+}
+
+function formatStateAddress(text){
+  text = (text || '').trim();
+  if(!text) return '';
+  if(text.length === 2 && /^[A-Za-z]{2}$/.test(text)) return text.toUpperCase();
+  return formatCityAddress(text);
+}
+
+function formatCountryAddress(text){
+  text = (text || '').trim();
+  if(!text) return '';
+  return formatCityAddress(text);
+}
+
+function normalizeCustomerAddressFields(){
+  const streetEl = $('custStreet');
+  const cityEl = $('custCity');
+  const stateEl = $('custState');
+  const countryEl = $('custCountry');
+  if(streetEl.value.trim()) streetEl.value = formatStreetAddress(streetEl.value);
+  if(cityEl.value.trim()) cityEl.value = formatCityAddress(cityEl.value);
+  if(stateEl.value.trim()) stateEl.value = formatStateAddress(stateEl.value);
+  if(!countryEl.classList.contains('placeholder-text') && countryEl.value.trim()){
+    countryEl.value = formatCountryAddress(countryEl.value);
+  }
+}
+
+function fillLeadTimeField(val){
+  const text = (val || '').trim();
+  if(!text || text === '—' || text === '-' || text.toLowerCase() === 'in stock'){
+    resetPlaceholderField($('liLead'), 'In Stock');
+    return;
+  }
+  $('liLead').classList.remove('placeholder-text');
+  $('liLead').value = text;
+}
+
+function fillMoneyPlaceholderField(el, val, placeholder){
+  if(!val || val === '$0' || val === '$0.00' || val === '0'){
+    resetPlaceholderField(el, placeholder);
+    return;
+  }
+  el.classList.remove('placeholder-text');
+  el.value = val;
+}
+
+function updateAddonsStatus(){
+  if(!$('customAddonsRequired').checked){
+    setDot('stAddons', null);
+    return;
+  }
+  setDot('stAddons', $('pasteCustomAddons').value.trim() ? 'ok' : 'missing');
+}
+
+function stateFromForm(){
+  const customPrice = isCustomBuild()
+    ? (readCustomPriceField($('liAmount')) || readCustomPriceField($('totSub')))
+    : null;
+  const li = {
+    model: $('liModel').value.trim(),
+    description: $('liDesc').value.trim(),
+    addons: $('customAddonsRequired').checked ? $('pasteCustomAddons').value.trim() : '',
+    amount: customPrice !== null ? customPrice : $('liAmount').value.trim(),
+    lead_time: readLeadTimeField(),
+  };
+  state.quote_num = $('quoteNum').value.trim();
+  state.quote_date = $('quoteDate').value.trim();
+  state.custom_addons_required = $('customAddonsRequired').checked;
+  state.quote_mode = state.custom_addons_required ? 'custom_build' : 'listing_only';
+  state.urls = { listing: $('urlListing').value.trim(), request_quote: '' };
+  state.customer = {
+    company: $('custCompany').value.trim(),
+    contact: $('custContact').value.trim(),
+    email: $('custEmail').value.trim(),
+    phone: $('custPhone').value.trim(),
+    street: $('custStreet').value.trim(),
+    city: $('custCity').value.trim(),
+    state: $('custState').value.trim(),
+    zip: $('custZip').value.trim(),
+    country: readOptionalPlaceholderField($('custCountry')),
+  };
+  state.rep = {
+    name: $('repName').value.trim(),
+    email: $('repEmail').value.trim(),
+    phone: $('repPhone').value.trim(),
+  };
+  state.line_items = [li];
+  state.totals = {
+    subtotal: customPrice !== null ? customPrice : $('totSub').value.trim(),
+    freight: readMoneyPlaceholderField($('totFreight'), '$0'),
+    tax: readMoneyPlaceholderField($('totTax'), '$0'),
+    grand_total: $('totGrand').value.trim(),
+  };
+  state.equipment_details = [{
+    name: $('eqName').value.trim() || li.model,
+    description: $('eqDesc').value.trim(),
+    frame: textToBullets($('eqFrame').value),
+    idlers: textToBullets($('eqIdlers').value),
+    undercarriage: textToBullets($('eqUndercarriage').value),
+    belt: textToBullets($('eqBelt').value),
+    other: textToBullets($('eqOther').value),
+    travel: $('customAddonsRequired').checked ? $('eqTravel').value.trim() : '',
+    road_portable_option: $('customAddonsRequired').checked ? $('eqRoadPortable').value.trim() : '',
+    power: $('eqPower').value.trim(),
+    assembly: $('eqAssembly').value.trim(),
+    image_url: $('eqImage').value.trim(),
+    specifications: $('customAddonsRequired').checked ? [] : parseSpecs($('eqSpecs').value),
+  }];
+  return state;
+}
+
+function fillForm(data){
+  fillingForm = true;
+  state = data;
+  $('quoteNum').value = data.quote_num || '';
+  $('quoteDate').value = data.quote_date || '';
+  $('urlListing').value = (data.urls||{}).listing || '';
+  $('customAddonsRequired').checked = !!data.custom_addons_required;
+  syncCustomAddonsUI();
+  const c = data.customer || {};
+  $('custCompany').value = c.company || '';
+  $('custContact').value = c.contact || '';
+  $('custEmail').value = c.email || '';
+  $('custPhone').value = c.phone || '';
+  fillCustomerFields(c);
+  const r = data.rep || {};
+  $('repName').value = r.name || '';
+  $('repEmail').value = r.email || '';
+  $('repPhone').value = r.phone || '';
+  const li = (data.line_items||[])[0] || {};
+  $('liModel').value = li.model || '';
+  $('liDesc').value = li.description || '';
+  if(data.custom_addons_required) $('pasteCustomAddons').value = li.addons || '';
+  fillCustomPriceFields(li.amount || '', (data.totals||{}).subtotal || '');
+  fillLeadTimeField(li.lead_time || '');
+  const t = data.totals || {};
+  fillMoneyPlaceholderField($('totFreight'), t.freight, '$0');
+  fillMoneyPlaceholderField($('totTax'), t.tax, '$0');
+  $('totGrand').value = t.grand_total || '';
+  const eq = (data.equipment_details||[])[0] || {};
+  $('eqName').value = eq.name || '';
+  $('eqDesc').value = eq.description || '';
+  $('eqFrame').value = bulletsToText(eq.frame);
+  $('eqIdlers').value = bulletsToText(eq.idlers);
+  $('eqUndercarriage').value = bulletsToText(eq.undercarriage);
+  $('eqBelt').value = bulletsToText(eq.belt);
+  $('eqOther').value = bulletsToText(eq.other);
+  $('eqTravel').value = eq.travel || '';
+  $('eqRoadPortable').value = eq.road_portable_option || '';
+  syncRoadPortableUI();
+  $('eqPower').value = eq.power || '';
+  $('eqAssembly').value = eq.assembly || '';
+  $('eqImage').value = eq.image_url || '';
+  $('eqSpecs').value = specsToText(eq.specifications);
+  const fs = data.field_status || {};
+  setDot('stModel', fs.model);
+  setDot('stDesc', fs.description);
+  updateAddonsStatus();
+  setDot('stAmount', fs.price);
+  setDot('stLead', fs.lead_time);
+  setDot('stEqName', fs.model);
+  setDot('stEqDesc', fs.description);
+  setDot('stFrame', fs.frame);
+  setDot('stIdlers', fs.idlers);
+  setDot('stUndercarriage', fs.undercarriage);
+  setDot('stBelt', fs.belt);
+  setDot('stOther', fs.other);
+  setDot('stTravel', fs.travel);
+  setDot('stRoadPortable', fs.road_portable_option);
+  setDot('stPower', fs.power);
+  setDot('stAssembly', fs.assembly);
+  if(!$('customAddonsRequired').checked) setDot('stSpecs', fs.specifications);
+  fillingForm = false;
+}
+
+function clearPreview(){
+  const frame = $('previewFrame');
+  frame.src = 'about:blank';
+  frame.style.display = 'none';
+  $('previewPlaceholder').style.display = '';
+  $('btnSavePdf').disabled = true;
+  $('btnSaveScreenshot').disabled = true;
+}
+
+async function loadDefaults(){
+  const r = await fetch('/api/conveyor/defaults');
+  state = await r.json();
+  currentId = null;
+  fillForm(state);
+  clearPreview();
+  $('extractStatus').className = 'status-bar';
+  $('extractStatus').textContent = '';
+  $('btnReextract').disabled = true;
+  urlsChanged = false;
+  checkApiKey();
+}
+
+async function checkApiKey(){
+  const r = await fetch('/api/conveyor/config');
+  const j = await r.json();
+  const w = $('apiWarn');
+  if(!j.has_api_key){
+    w.style.display = 'block';
+    w.textContent = 'FIRECRAWL_API_KEY is not configured. Copy .env.example to .env and add your key to use Extract.';
+  } else {
+    w.style.display = 'none';
+  }
+}
+
+async function saveDraft(silent){
+  stateFromForm();
+  state._id = currentId;
+  const r = await fetch('/api/conveyor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+  const j = await r.json();
+  if(j.ok){
+    currentId = j.id; state._id = j.id;
+    if(!silent) toast('Draft saved');
+    return true;
+  }
+  toast('Save failed'); return false;
+}
+
+async function extract(force){
+  const listing = $('urlListing').value.trim();
+  if(!listing){ toast('Enter a conveyor listing URL'); return; }
+  $('editor').classList.add('loading');
+  $('extractStatus').className = 'status-bar';
+  $('extractStatus').textContent = 'Extracting via Firecrawl…';
+  stateFromForm();
+  try {
+    const r = await fetch('/api/conveyor/extract',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        urls: { listing, request_quote: '' },
+        line_items: [{ addons: $('pasteCustomAddons').value.trim() }],
+        job_id: currentId,
+        force: !!force,
+        custom_addons_required: $('customAddonsRequired').checked,
+        quote_mode: $('customAddonsRequired').checked ? 'custom_build' : 'listing_only',
+      }),
+    });
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || 'Extract failed');
+    Object.assign(state, j);
+    if(j._id) currentId = j._id;
+    fillForm(state);
+    urlsChanged = false;
+    $('btnReextract').disabled = false;
+    const errs = (j.scrape_meta||{}).errors || [];
+    if(errs.length){
+      $('extractStatus').className = 'status-bar error';
+      $('extractStatus').textContent = 'Partial extract: ' + errs.join('; ');
+    } else {
+      $('extractStatus').className = 'status-bar ok';
+      $('extractStatus').textContent = 'Extract complete — review fields below before building quote.';
+    }
+    toast('Data extracted');
+  } catch(e){
+    $('extractStatus').className = 'status-bar error';
+    $('extractStatus').textContent = e.message;
+    toast('Extract failed');
+  } finally {
+    $('editor').classList.remove('loading');
+  }
+}
+
+async function buildQuote(){
+  applyTotalsOnBuild();
+  formatLineAmountOnBuild();
+  normalizeCustomerAddressFields();
+  stateFromForm();
+  if(!await saveDraft(true)) return;
+  $('extractStatus').textContent = 'Building quote…';
+  try {
+    const r = await fetch('/api/conveyor/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || 'Render failed');
+    $('previewFrame').src = '/conveyor/quote?id=' + encodeURIComponent(currentId) + '&t=' + Date.now();
+    $('previewFrame').style.display = 'block';
+    $('previewPlaceholder').style.display = 'none';
+    $('btnSavePdf').disabled = false;
+    $('btnSaveScreenshot').disabled = false;
+    $('extractStatus').className = 'status-bar ok';
+    $('extractStatus').textContent = 'Quote built — preview updated.';
+    toast('Quote built');
+  } catch(e){
+    $('extractStatus').className = 'status-bar error';
+    $('extractStatus').textContent = e.message;
+  }
+}
+
+async function savePdf(){
+  if(!currentId){
+    toast('Build the quote first');
+    return;
+  }
+  const btn = $('btnSavePdf');
+  btn.disabled = true;
+  toast('Building PDF…');
+  try {
+    const r = await fetch('/conveyor/download?id=' + encodeURIComponent(currentId));
+    if(!r.ok){
+      let msg = 'PDF save failed';
+      try {
+        const j = await r.json();
+        if(j.error) msg = j.error;
+      } catch(_e){}
+      throw new Error(msg);
+    }
+    const blob = await r.blob();
+    const dispo = r.headers.get('Content-Disposition') || '';
+    const match = dispo.match(/filename=\"?([^\";]+)\"?/i);
+    const filename = match ? match[1] : 'GCS_Conveyor_Quote.pdf';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('PDF saved');
+  } catch(e){
+    toast(e.message || 'PDF save failed');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function saveScreenshot(){
+  if(!currentId){
+    toast('Build the quote first');
+    return;
+  }
+  const frame = $('previewFrame');
+  let doc;
+  try {
+    doc = frame.contentDocument || frame.contentWindow.document;
+  } catch(_e){
+    doc = null;
+  }
+  if(!doc || !doc.documentElement){
+    toast('Preview not ready — build the quote first');
+    return;
+  }
+  const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  const btn = $('btnSaveScreenshot');
+  btn.disabled = true;
+  toast('Capturing screenshot PDF…');
+  try {
+    const r = await fetch('/conveyor/screenshot', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ html, id: currentId })
+    });
+    if(!r.ok){
+      let msg = 'Screenshot save failed';
+      try {
+        const j = await r.json();
+        if(j.error) msg = j.error;
+      } catch(_e){}
+      throw new Error(msg);
+    }
+    const blob = await r.blob();
+    const dispo = r.headers.get('Content-Disposition') || '';
+    const match = dispo.match(/filename=\"?([^\";]+)\"?/i);
+    const filename = match ? match[1] : 'GCS_Conveyor_Quote_screenshot.pdf';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('Screenshot PDF saved');
+  } catch(e){
+    toast(e.message || 'Screenshot save failed');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$('urlListing').addEventListener('input',()=>{ urlsChanged = true; $('btnReextract').disabled = false; });
+$('pasteCustomAddons').addEventListener('input', updateAddonsStatus);
+$('eqTravel').addEventListener('input', syncRoadPortableUI);
+$('customAddonsRequired').addEventListener('change',()=>{
+  syncCustomAddonsUI();
+  if($('customAddonsRequired').checked && !fillingForm){
+    resetCustomPriceFields();
+  }
+  urlsChanged = true;
+});
+
+$('btnExtract').addEventListener('click',()=>extract(false));
+$('btnReextract').addEventListener('click',()=>extract(true));
+$('btnSave').addEventListener('click',()=>saveDraft(false));
+$('btnBuild').addEventListener('click',buildQuote);
+$('btnSavePdf').addEventListener('click',savePdf);
+$('btnSaveScreenshot').addEventListener('click',saveScreenshot);
+$('btnNew').addEventListener('click',()=>{ if(confirm('Start a new conveyor quote?')) loadDefaults(); });
+
+async function openDrawer(){
+  $('overlay').classList.add('show');
+  $('drawer').classList.add('show');
+  const r = await fetch('/api/conveyor/jobs');
+  allJobs = await r.json();
+  renderJobs(allJobs);
+}
+function closeDrawer(){
+  $('overlay').classList.remove('show');
+  $('drawer').classList.remove('show');
+}
+function renderJobs(jobs){
+  const list = $('jobsList');
+  if(!jobs.length){
+    list.innerHTML = '<div class="empty">No saved conveyor quotes yet.<br>Extract data and click <b>Save Draft</b>.</div>';
+    return;
+  }
+  list.innerHTML = jobs.map(j=>`
+    <div class="job" data-id="${escapeHtml(j.id)}">
+      <div class="job-actions">
+        <button class="ja dup" title="Duplicate">⧉</button>
+        <button class="ja del" title="Delete">🗑</button>
+      </div>
+      <div class="co">${escapeHtml(j.cust_company||'(no customer)')}</div>
+      <div class="mc">${escapeHtml(j.machine||j.quote_num||'')}</div>
+      <div class="meta"><span>${escapeHtml(j.saved_at||'')}</span><span class="tot">${money(j.total)}</span></div>
+    </div>`).join('');
+  list.querySelectorAll('.job').forEach(card=>{
+    const id = card.dataset.id;
+    card.addEventListener('click', async e=>{
+      if(e.target.closest('.dup')){ dupJob(id); return; }
+      if(e.target.closest('.del')){ delJob(id); return; }
+      const jr = await fetch('/api/conveyor/job?id='+encodeURIComponent(id));
+      if(jr.ok){ state = await jr.json(); currentId = id; fillForm(state); closeDrawer(); toast('Opened quote'); }
+      else toast('Could not open quote');
+    });
+  });
+}
+async function dupJob(id){
+  const r = await fetch('/api/conveyor/job?id='+encodeURIComponent(id));
+  if(!r.ok) return;
+  state = await r.json();
+  currentId = null;
+  delete state._id;
+  delete state._saved_at;
+  fillForm(state);
+  closeDrawer();
+  toast('Duplicated — save to create a new copy');
+}
+async function delJob(id){
+  if(!confirm('Delete this conveyor quote permanently?')) return;
+  await fetch('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+  if(currentId===id) currentId=null;
+  allJobs = allJobs.filter(j=>j.id!==id);
+  renderJobs(allJobs);
+  toast('Deleted');
+}
+
+$('btnJobs').addEventListener('click', openDrawer);
+$('closeDrawer').addEventListener('click', closeDrawer);
+$('overlay').addEventListener('click', closeDrawer);
+$('jobSearch').addEventListener('input', e=>{
+  const q = e.target.value.toLowerCase();
+  renderJobs(allJobs.filter(j=>
+    ((j.cust_company||'')+(j.machine||'')+(j.quote_num||'')).toLowerCase().includes(q)
+  ));
+});
+
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key==='s'){ e.preventDefault(); saveDraft(false); }
+});
+
+loadDefaults().then(()=>{
+  syncCustomAddonsUI();
+  bindPlaceholderField('custCountry');
+  bindPlaceholderField('liLead');
+  bindPlaceholderField('totFreight');
+  bindPlaceholderField('totTax');
+  bindCustomPriceField('liAmount', syncCustomPriceFromAmount);
+  bindCustomPriceField('totSub', syncCustomPriceFromSubtotal);
+  resetPlaceholderField($('custCountry'), 'USA');
+  resetPlaceholderField($('liLead'), 'In Stock');
+  resetPlaceholderField($('totFreight'), '$0');
+  resetPlaceholderField($('totTax'), '$0');
+});
+</script>
+</body>
+</html>
