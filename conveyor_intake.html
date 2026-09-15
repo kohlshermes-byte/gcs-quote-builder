@@ -895,11 +895,27 @@ async function savePdf(){
     toast('Build the quote first');
     return;
   }
+  const frame = $('previewFrame');
+  let doc;
+  try {
+    doc = frame.contentDocument || frame.contentWindow.document;
+  } catch(_e){
+    doc = null;
+  }
+  if(!doc || !doc.documentElement){
+    toast('Preview not ready — build the quote first');
+    return;
+  }
+  const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
   const btn = $('btnSavePdf');
   btn.disabled = true;
   toast('Building PDF…');
   try {
-    const r = await fetch('/conveyor/download?id=' + encodeURIComponent(currentId));
+    const r = await fetch('/conveyor/screenshot', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ html, id: currentId })
+    });
     if(!r.ok){
       let msg = 'PDF save failed';
       try {
@@ -911,7 +927,8 @@ async function savePdf(){
     const blob = await r.blob();
     const dispo = r.headers.get('Content-Disposition') || '';
     const match = dispo.match(/filename=\"?([^\";]+)\"?/i);
-    const filename = match ? match[1] : 'GCS_Conveyor_Quote.pdf';
+    let filename = match ? match[1] : 'GCS_Conveyor_Quote_screenshot.pdf';
+    filename = filename.replace('_screenshot', '');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

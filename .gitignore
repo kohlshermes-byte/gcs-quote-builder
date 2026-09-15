@@ -1,5 +1,6 @@
 .env
 jobs/
+.venv/
 __pycache__/
 *.pyc
 .DS_Store

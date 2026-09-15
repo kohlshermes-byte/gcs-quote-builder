@@ -6,6 +6,7 @@ Run this and a browser opens with the quote builder. All data stays on this mach
 Jobs are stored as JSON in ./jobs/. Generated PDFs/DOCX go in ./jobs/<id>/.
 """
 import json
+import hashlib
 import os
 import re
 import sys
@@ -226,6 +227,50 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass  # quiet
 
+    # ---- simple shared-password gate ------------------------------------
+    # Change the password here (or set APP_PASSWORD env var).
+    APP_PASSWORD = os.environ.get("APP_PASSWORD", "crusher2026")
+    AUTH_COOKIE = "gcs_auth=" + hashlib.sha256(
+        os.environ.get("APP_PASSWORD", "crusher2026").encode()).hexdigest()[:32]
+
+    def _authed(self):
+        return self.headers.get("Cookie", "").find(self.AUTH_COOKIE) != -1
+
+    def _login_page(self, msg=""):
+        note = f'<p class="err">{msg}</p>' if msg else ""
+        body = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GCS Quote Builder — Sign in</title><style>
+body{{font-family:system-ui,sans-serif;background:#11100F;color:#eee;display:flex;
+justify-content:center;align-items:center;min-height:100vh;margin:0}}
+.card{{background:#1d1c1a;padding:2rem 2.5rem;border-radius:12px;border:1px solid #333;
+text-align:center}} h1{{font-size:1.2rem;margin:0 0 1rem;color:#C81010}}
+input{{padding:.6rem .8rem;border-radius:8px;border:1px solid #444;background:#11100F;
+color:#eee;font-size:1rem;width:220px}} button{{padding:.6rem 1.2rem;margin-left:.5rem;
+border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:pointer}}
+.err{{color:#ff6b6b}}</style></head><body><div class="card">
+<h1>GCS Quote Builder</h1>{note}
+<form method="POST" action="/login">
+<input type="password" name="pw" placeholder="Password" autofocus required>
+<button>Enter</button></form></div></body></html>"""
+        return self._send(200, body, "text/html; charset=utf-8")
+
+    def _require_auth(self):
+        """Return True if the request may proceed; otherwise serve login."""
+        if self._authed():
+            return True
+        u = urlparse(self.path)
+        if u.path == "/login":
+            return True  # handled by do_GET/do_POST below
+        if u.path == "/logo":
+            return True  # public brand asset; needed by headless PDF rendering
+        self.send_response(302)
+        self.send_header("Location", "/login")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return False
+    # ----------------------------------------------------------------------
+
     def _send(self, code, body, ctype="application/json"):
         if isinstance(body, (dict, list)):
             body = json.dumps(body).encode('utf-8')
@@ -253,9 +298,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
-        if u.path == "/" or u.path == "/index.html":
-            return self._send(200, INDEX_HTML, "text/html; charset=utf-8")
-        if u.path == "/conveyor":
+        if u.path == "/login":
+            return self._login_page()
+        if not self._require_auth():
+            return
+        if u.path == "/" or u.path == "/index.html" or u.path == "/conveyor":
             return self._send(200, CONVEYOR_INTAKE_HTML, "text/html; charset=utf-8")
         if u.path == "/conveyor/quote":
             return self._conveyor_quote(q.get('id', [''])[0])
@@ -308,6 +355,30 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         length = int(self.headers.get('Content-Length', 0))
         raw = self.rfile.read(length) if length else b'{}'
+
+        if u.path == "/login":
+            pw = raw.decode('utf-8', 'replace')
+            # accept form-encoded or JSON
+            if "=" in pw and not pw.strip().startswith("{"):
+                from urllib.parse import parse_qsl
+                pw = dict(parse_qsl(pw)).get("pw", "")
+            else:
+                try:
+                    pw = json.loads(pw).get("pw", "")
+                except Exception:
+                    pw = ""
+            if pw == self.APP_PASSWORD:
+                self.send_response(303)
+                self.send_header("Location", "/")
+                self.send_header("Set-Cookie", self.AUTH_COOKIE + "; Path=/; HttpOnly; Max-Age=2592000")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                self._login_page("Wrong password — try again")
+            return
+
+        if not self._require_auth():
+            return
         try:
             data = json.loads(raw.decode('utf-8'))
         except Exception:
@@ -629,10 +700,7 @@ def _bind():
 
 def main():
     # load the UI from disk so it's easy to tweak
-    global INDEX_HTML, CONVEYOR_INTAKE_HTML
-    ui_path = os.path.join(BASE, "ui.html")
-    with open(ui_path, encoding='utf-8') as f:
-        INDEX_HTML = f.read()
+    global CONVEYOR_INTAKE_HTML
     with open(CONVEYOR_INTAKE_PATH, encoding='utf-8') as f:
         CONVEYOR_INTAKE_HTML = f.read()
 
@@ -642,8 +710,7 @@ def main():
     conveyor_url = f"http://127.0.0.1:{port}/conveyor"
     print("=" * 60)
     print("  GCS Quote Builder is running")
-    print(f"  Equipment quotes:  {url}")
-    print(f"  Conveyor quotes:   {conveyor_url}")
+    print("  Conveyor quotes:   http://127.0.0.1:%d/  (also /conveyor)" % port)
     print("  (This window must stay open while you use the app.)")
     print("  Close this window to stop the app.")
     print("=" * 60)
