@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GCS Conveyor Quote Builder</title>
+<title>GCS Quote Builder</title>
 <style>
   :root{
     --red:#CC0000; --red-dark:#aa0000; --ink:#111111; --panel:#1b1a18; --panel-2:#222120;
@@ -33,8 +33,12 @@
   .row{display:flex;gap:10px;margin-bottom:10px}
   .fld{flex:1;min-width:0}
   label{display:block;font-size:10px;font-weight:bold;color:var(--muted);margin-bottom:4px;letter-spacing:.06em;text-transform:uppercase}
-  input,textarea{width:100%;background:var(--field);border:1px solid transparent;border-radius:4px;color:var(--text);font-size:13px;padding:8px 10px;font-family:inherit}
-  input:focus,textarea:focus{outline:none;border-color:var(--red);background:var(--field-focus)}
+  input,textarea,select{width:100%;background:var(--field);border:1px solid transparent;border-radius:4px;color:var(--text);font-size:13px;padding:8px 10px;font-family:inherit}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--red);background:var(--field-focus)}
+  select{appearance:none;-webkit-appearance:none;cursor:pointer;
+    background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238d8881'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+  select option{background:var(--panel-2);color:var(--text)}
   input[readonly]{color:var(--muted);cursor:default}
   input.placeholder-text{color:var(--muted)}
   textarea{resize:vertical;min-height:60px;line-height:1.45}
@@ -90,7 +94,7 @@
 <body>
 <div class="topbar">
   <div class="brand">
-    <b>GCS <span style="color:var(--red)">Conveyor</span> Quote Builder</b>
+    <b><span style="color:#fff">GCS</span> <span style="color:var(--red)">Quote</span> <span style="color:#fff">Builder</span></b>
     <small>Stage 1 Intake · Firecrawl Extract · Stage 2 Quote</small>
   </div>
   <div class="spacer"></div>
@@ -108,17 +112,8 @@
 
     <div class="grp">
       <div class="grp-head">Source URLs</div>
-      <label class="toggle-row">
-        <input type="checkbox" id="customAddonsRequired">
-        <span>Custom add-ons required (new build)</span>
-      </label>
-      <div class="fld"><label>Conveyor Listing URL *</label><input id="urlListing" type="url" placeholder="https://www.grindercrusherscreen.com/listings/..."></div>
-      <div class="fld" id="pasteAddonsRow" style="display:none;margin-bottom:10px">
-        <label><span class="dot missing" id="stAddons"></span>Paste Custom Add-Ons</label>
-        <textarea id="pasteCustomAddons" rows="5" placeholder="Paste the custom add-ons / configured options from your Request a Quote page"></textarea>
-      </div>
+      <div class="fld"><label>Listing URL *</label><input id="urlListing" type="url" placeholder="https://www.grindercrusherscreen.com/listings/..."></div>
       <p class="hint" id="urlHint">Standard listing (new or used): paste the GCS listing URL only. All equipment sections are pulled from that page.</p>
-      <p class="case2-note" id="case2Note">Custom build: paste the listing URL, then copy the configured options from your Request a Quote page into Paste Custom Add-Ons below. Quote cart data is stored in your browser, not in the URL.</p>
       <div class="actions">
         <button class="tb-btn primary" id="btnExtract">Extract Data</button>
         <button class="tb-btn" id="btnReextract" disabled>Re-extract</button>
@@ -155,15 +150,23 @@
 
     <div class="grp">
       <div class="grp-head">Prepared By</div>
-      <div class="fld"><label>Name</label><input id="repName"></div>
-      <div class="row">
-        <div class="fld"><label>Email</label><input id="repEmail"></div>
-        <div class="fld"><label>Phone</label><input id="repPhone"></div>
+      <div class="fld"><label>Sales Rep</label>
+        <select id="repSelect">
+          <option value="">— Select —</option>
+          <option value="Kohl Schaffer">Kohl Schaffer</option>
+          <option value="Mark Morris">Mark Morris</option>
+          <option value="Alex Laldin">Alex Laldin</option>
+          <option value="Rick Cohen">Rick Cohen</option>
+          <option value="Daniel Ferdinand">Daniel Ferdinand</option>
+        </select>
       </div>
+      <input type="hidden" id="repName">
+      <input type="hidden" id="repEmail">
+      <input type="hidden" id="repPhone">
     </div>
 
     <div class="grp">
-      <div class="grp-head">Review Extracted Data</div>
+      <div class="grp-head">Items & Pricing</div>
       <div class="line-item-card">
         <h4>Line Item</h4>
         <div class="review-grid">
@@ -194,6 +197,7 @@
       <div class="fld" id="eqTravelRow"><label><span class="dot missing" id="stTravel"></span>Travel</label><input id="eqTravel" placeholder="Road Portable"></div>
       <div class="fld" id="eqRoadPortableRow" style="display:none"><label><span class="dot missing" id="stRoadPortable"></span>Road Portable Option</label><input id="eqRoadPortable" placeholder="Telescopic Military Pintle"></div>
       <div class="fld"><label><span class="dot missing" id="stPower"></span>Power</label><textarea id="eqPower" rows="2"></textarea></div>
+      <div class="fld"><label><span class="dot missing" id="stAddons"></span>Custom Add-Ons (one item per line)</label><textarea id="eqAddons" rows="4"></textarea></div>
       <div class="fld"><label><span class="dot missing" id="stOther"></span>Other (one item per line)</label><textarea id="eqOther" rows="4"></textarea></div>
       <div class="fld"><label><span class="dot missing" id="stAssembly"></span>Assembly</label><input id="eqAssembly"></div>
       <div class="fld" id="eqSpecsRow"><label><span class="dot missing" id="stSpecs"></span>Specifications (Label | Value per line)</label><textarea id="eqSpecs" rows="6" placeholder="Stock Number | GCS242304-1"></textarea></div>
@@ -314,7 +318,7 @@ let syncingCustomPrice = false;
 const CUSTOM_PRICE_PLACEHOLDER = 'Enter Custom Price';
 
 function isCustomBuild(){
-  return $('customAddonsRequired').checked;
+  return false;
 }
 
 function hasCustomPriceValue(val){
@@ -373,26 +377,11 @@ function textToBullets(text){
 }
 
 function syncCustomAddonsUI(){
-  const on = $('customAddonsRequired').checked;
-  $('pasteAddonsRow').style.display = on ? 'block' : 'none';
-  $('case2Note').style.display = on ? 'block' : 'none';
-  $('eqSpecsRow').style.display = on ? 'none' : 'block';
-  $('eqTravelRow').style.display = on ? 'block' : 'none';
-  $('urlHint').textContent = on
-    ? 'Custom build: listing URL for equipment details, plus paste configured add-ons from your quote cart.'
-    : 'Standard listing (new or used): paste the GCS listing URL only. All equipment sections are pulled from that page.';
-  if(!on) $('pasteCustomAddons').value = '';
-  if(!on){
-    ['liAmount', 'totSub'].forEach(id=>{
-      const el = $(id);
-      if(el.classList.contains('placeholder-text')){
-        el.value = '';
-        el.classList.remove('placeholder-text');
-      }
-    });
-  }
+  $('eqSpecsRow').style.display = 'block';
+  $('eqTravelRow').style.display = 'none';
+  $('eqRoadPortableRow').style.display = 'none';
+  $('urlHint').textContent = 'Standard listing (new or used): paste the GCS listing URL only. All equipment sections are pulled from that page.';
   syncRoadPortableUI();
-  updateAddonsStatus();
 }
 
 function resetCustomPriceFields(){
@@ -488,15 +477,7 @@ function bindCustomPriceField(id, syncFn){
 }
 
 function syncRoadPortableUI(){
-  const on = $('customAddonsRequired').checked;
-  if(!on){
-    $('eqRoadPortableRow').style.display = 'none';
-    return;
-  }
-  const travel = $('eqTravel').value.trim().toLowerCase();
-  const show = travel.includes('road portable');
-  $('eqRoadPortableRow').style.display = show ? 'block' : 'none';
-  if(!show) $('eqRoadPortable').value = '';
+  $('eqRoadPortableRow').style.display = 'none';
 }
 
 function resetPlaceholderField(el, placeholder){
@@ -645,11 +626,7 @@ function fillMoneyPlaceholderField(el, val, placeholder){
 }
 
 function updateAddonsStatus(){
-  if(!$('customAddonsRequired').checked){
-    setDot('stAddons', null);
-    return;
-  }
-  setDot('stAddons', $('pasteCustomAddons').value.trim() ? 'ok' : 'missing');
+  /* no-op: custom add-ons now live in the equipment section (eqAddons) */
 }
 
 function stateFromForm(){
@@ -659,14 +636,13 @@ function stateFromForm(){
   const li = {
     model: $('liModel').value.trim(),
     description: $('liDesc').value.trim(),
-    addons: $('customAddonsRequired').checked ? $('pasteCustomAddons').value.trim() : '',
     amount: customPrice !== null ? customPrice : $('liAmount').value.trim(),
     lead_time: readLeadTimeField(),
   };
   state.quote_num = $('quoteNum').value.trim();
   state.quote_date = $('quoteDate').value.trim();
-  state.custom_addons_required = $('customAddonsRequired').checked;
-  state.quote_mode = state.custom_addons_required ? 'custom_build' : 'listing_only';
+  state.custom_addons_required = false;
+  state.quote_mode = 'listing_only';
   state.urls = { listing: $('urlListing').value.trim(), request_quote: '' };
   state.customer = {
     company: $('custCompany').value.trim(),
@@ -699,15 +675,30 @@ function stateFromForm(){
     undercarriage: textToBullets($('eqUndercarriage').value),
     belt: textToBullets($('eqBelt').value),
     other: textToBullets($('eqOther').value),
-    travel: $('customAddonsRequired').checked ? $('eqTravel').value.trim() : '',
-    road_portable_option: $('customAddonsRequired').checked ? $('eqRoadPortable').value.trim() : '',
+    travel: '',
+    road_portable_option: '',
     power: $('eqPower').value.trim(),
     assembly: $('eqAssembly').value.trim(),
     image_url: $('eqImage').value.trim(),
-    specifications: $('customAddonsRequired').checked ? [] : parseSpecs($('eqSpecs').value),
+    custom_addons: textToBullets($('eqAddons').value),
+    specifications: parseSpecs($('eqSpecs').value),
   }];
   return state;
 }
+
+const REPS = {
+  'Kohl Schaffer':    { name: 'Kohl Schaffer',    email: 'Kohl@GrinderCrusherScreen.com',   phone: '770-824-9457' },
+  'Mark Morris':      { name: 'Mark Morris',      email: 'Mark@GrinderCrusherScreen.com',   phone: '503-563-2720' },
+  'Alex Laldin':      { name: 'Alex Laldin',      email: 'Alex@GrinderCrusherScreen.com',   phone: '770-343-2867' },
+  'Rick Cohen':       { name: 'Rick Cohen',       email: 'Rick@GrinderCrusherScreen.com',   phone: '770-282-8618' },
+  'Daniel Ferdinand': { name: 'Daniel Ferdinand', email: 'Daniel@GrinderCrusherScreen.com', phone: '470-458-9313' },
+};
+$('repSelect').addEventListener('change', () => {
+  const rep = REPS[$('repSelect').value] || { name: '', email: '', phone: '' };
+  $('repName').value = rep.name;
+  $('repEmail').value = rep.email;
+  $('repPhone').value = rep.phone;
+});
 
 function fillForm(data){
   fillingForm = true;
@@ -715,7 +706,6 @@ function fillForm(data){
   $('quoteNum').value = data.quote_num || '';
   $('quoteDate').value = data.quote_date || '';
   $('urlListing').value = (data.urls||{}).listing || '';
-  $('customAddonsRequired').checked = !!data.custom_addons_required;
   syncCustomAddonsUI();
   const c = data.customer || {};
   $('custCompany').value = c.company || '';
@@ -727,10 +717,10 @@ function fillForm(data){
   $('repName').value = r.name || '';
   $('repEmail').value = r.email || '';
   $('repPhone').value = r.phone || '';
+  $('repSelect').value = REPS[r.name] ? r.name : '';
   const li = (data.line_items||[])[0] || {};
   $('liModel').value = li.model || '';
   $('liDesc').value = li.description || '';
-  if(data.custom_addons_required) $('pasteCustomAddons').value = li.addons || '';
   fillCustomPriceFields(li.amount || '', (data.totals||{}).subtotal || '');
   fillLeadTimeField(li.lead_time || '');
   const t = data.totals || {};
@@ -749,6 +739,7 @@ function fillForm(data){
   $('eqRoadPortable').value = eq.road_portable_option || '';
   syncRoadPortableUI();
   $('eqPower').value = eq.power || '';
+  $('eqAddons').value = bulletsToText(eq.custom_addons);
   $('eqAssembly').value = eq.assembly || '';
   $('eqImage').value = eq.image_url || '';
   $('eqSpecs').value = specsToText(eq.specifications);
@@ -768,8 +759,9 @@ function fillForm(data){
   setDot('stTravel', fs.travel);
   setDot('stRoadPortable', fs.road_portable_option);
   setDot('stPower', fs.power);
+  setDot('stAddons', fs.custom_addons);
   setDot('stAssembly', fs.assembly);
-  if(!$('customAddonsRequired').checked) setDot('stSpecs', fs.specifications);
+  setDot('stSpecs', fs.specifications);
   fillingForm = false;
 }
 
@@ -833,11 +825,11 @@ async function extract(force){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         urls: { listing, request_quote: '' },
-        line_items: [{ addons: $('pasteCustomAddons').value.trim() }],
+        line_items: [{ addons: '' }],
         job_id: currentId,
         force: !!force,
-        custom_addons_required: $('customAddonsRequired').checked,
-        quote_mode: $('customAddonsRequired').checked ? 'custom_build' : 'listing_only',
+        custom_addons_required: false,
+        quote_mode: 'listing_only',
       }),
     });
     const j = await r.json();
@@ -1000,15 +992,7 @@ async function saveScreenshot(){
 }
 
 $('urlListing').addEventListener('input',()=>{ urlsChanged = true; $('btnReextract').disabled = false; });
-$('pasteCustomAddons').addEventListener('input', updateAddonsStatus);
 $('eqTravel').addEventListener('input', syncRoadPortableUI);
-$('customAddonsRequired').addEventListener('change',()=>{
-  syncCustomAddonsUI();
-  if($('customAddonsRequired').checked && !fillingForm){
-    resetCustomPriceFields();
-  }
-  urlsChanged = true;
-});
 
 $('btnExtract').addEventListener('click',()=>extract(false));
 $('btnReextract').addEventListener('click',()=>extract(true));

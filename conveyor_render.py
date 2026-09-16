@@ -233,6 +233,11 @@ def _render_equipment_block(detail, source_urls, custom_build=False):
         power_lines = [ln.strip() for ln in str(power).split("\n") if ln.strip()]
         categories_html += _render_category("Power", power_lines or [power])
 
+    addons = detail.get("custom_addons") or []
+    if addons and isinstance(addons, str):
+        addons = [ln.strip() for ln in addons.split("\n") if ln.strip()]
+    categories_html += _render_category("Custom Add-Ons", addons)
+
     other = detail.get("other") or []
     if other and isinstance(other, str):
         other = [ln.strip() for ln in other.split("\n") if ln.strip()]

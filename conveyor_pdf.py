@@ -676,6 +676,7 @@ def build_conveyor_pdf_reportlab(pdf_path, data, cache_dir=None):
                 ("Travel", "travel"),
                 ("Road Portable Option", "road_portable_option"),
                 ("Power", "power"),
+                ("Custom Add-Ons", "custom_addons"),
                 ("Assembly", "assembly"),
             ):
                 block = _bullet_block(label, detail.get(key))

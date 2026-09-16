@@ -153,6 +153,8 @@ Two major phases were completed:
 | Phase 2 | User specified 7 equipment categories from GCS listing pages |
 | Phase 2 | Built `listing_parser.py`, Case 1 toggle, structured review + render |
 | Session end | Validated TC3030 end-to-end; created this journal + `handoff.md` |
+| Later session | PREPARED BY → Sales Rep dropdown (REPS table in intake JS) w/ builder styling |
+| Later session | Removed "Custom Add-Ons Required" checkbox + paste box; added plain CUSTOM ADD-ONS textarea below Power (equipment_details.custom_addons), rendered in HTML + PDF. quote_mode now always listing_only |
 
 ---
 
