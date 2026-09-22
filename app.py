@@ -21,6 +21,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 JOBS_DIR = os.path.join(BASE, "jobs")
 LOGO_PATH = os.path.join(BASE, "assets", "logo.png")
 CONVEYOR_INTAKE_PATH = os.path.join(BASE, "conveyor_intake.html")
+BETA_INTAKE_FILE = os.path.join(BASE, "beta_intake.html")
 
 # Load .env if present (optional; firecrawl_extract also reads it directly)
 _env_path = os.path.join(BASE, ".env")
@@ -304,9 +305,12 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
             return
         if u.path == "/" or u.path == "/index.html" or u.path == "/conveyor":
             return self._send(200, CONVEYOR_INTAKE_HTML, "text/html; charset=utf-8")
+        if u.path == "/test" or u.path == "/test/":
+            return self._send(200, BETA_INTAKE_HTML, "text/html; charset=utf-8")
         if u.path == "/conveyor/quote":
             return self._conveyor_quote(q.get('id', [''])[0])
         if u.path == "/conveyor/download":
+            self._is_beta_req = q.get('beta', [''])[0] == '1'
             self._conveyor_download(q.get('id', [''])[0])
             return
         if u.path == "/api/conveyor/defaults":
@@ -606,7 +610,9 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
             data = json.load(f)
         customer = data.get('customer') or {}
         base = slugify(customer.get('company') or customer.get('contact') or 'conveyor')
-        name = f"GCS_Conveyor_Quote_{base}.pdf"
+        name = beta_pdf_name(data, base)
+        if not name:
+            name = f"GCS_Conveyor_Quote_{base}.pdf"
         pdf_path = os.path.join(jdir, name)
         try:
             import conveyor_pdf
@@ -617,12 +623,14 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
 
     def _conveyor_screenshot(self, data):
         """POST {html, id?} → Playwright page screenshots assembled into a letter PDF."""
+        self._is_beta_req = bool((data or {}).get("beta"))
         html = (data or {}).get("html") or ""
         if not str(html).strip():
             return self._send(400, {"error": "missing html"})
 
         jid = (data or {}).get("id") or ""
         jdir = safe_job_dir(jid) if jid else None
+        quote = {}
         if jdir is None:
             jdir = os.path.join(JOBS_DIR, "_screenshots")
             os.makedirs(jdir, exist_ok=True)
@@ -641,7 +649,9 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
 
         host = self.headers.get("Host") or f"127.0.0.1:{PORT}"
         base_url = f"http://{host}"
-        name = f"GCS_Conveyor_Quote_{base}_screenshot.pdf"
+        name = beta_pdf_name(quote, base)
+        if not name:
+            name = f"GCS_Conveyor_Quote_{base}_screenshot.pdf"
         pdf_path = os.path.join(jdir, name)
         try:
             import conveyor_screenshot
@@ -701,6 +711,12 @@ def _bind():
 def main():
     # load the UI from disk so it's easy to tweak
     global CONVEYOR_INTAKE_HTML
+    global BETA_INTAKE_HTML
+    try:
+        with open(BETA_INTAKE_FILE, encoding="utf-8") as f:
+            BETA_INTAKE_HTML = f.read()
+    except Exception:
+        BETA_INTAKE_HTML = CONVEYOR_INTAKE_HTML
     with open(CONVEYOR_INTAKE_PATH, encoding='utf-8') as f:
         CONVEYOR_INTAKE_HTML = f.read()
 
@@ -723,6 +739,25 @@ def main():
 
 INDEX_HTML = ""  # filled in main()
 CONVEYOR_INTAKE_HTML = ""  # filled in main()
+BETA_INTAKE_HTML = ""  # beta UI served at /test
+
+
+def beta_pdf_name(data, base):
+    """Beta filename: GCS_<Model>_Quote_<Company>. Model token = last word of
+    the first line item's MODEL / SKU (e.g. '1999 Duratech HD12' -> HD12)."""
+    model = ""
+    try:
+        items = data.get("line_items") or []
+        if items:
+            raw = (items[0].get("model") or "").strip()
+            parts = raw.split()
+            if parts:
+                model = parts[-1]
+    except Exception:
+        model = ""
+    if not model:
+        return None  # fall back to the standard naming
+    return f"GCS_{slugify(model)}_Quote_{base}.pdf"
 
 if __name__ == "__main__":
     main()

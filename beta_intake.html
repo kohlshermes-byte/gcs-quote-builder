@@ -95,7 +95,7 @@
 <div class="topbar">
   <div class="brand">
     <b><span style="color:#fff">GCS</span> <span style="color:var(--red)">Quote</span> <span style="color:#fff">Builder</span></b>
-    <small>Stage 1 Intake · Firecrawl Extract · Stage 2 Quote</small>
+    <small>Stage 1 Intake · Firecrawl Extract · Stage 2 Quote · <span style="color:#ffd166">BETA FEATURES</span></small>
   </div>
   <div class="spacer"></div>
   <button class="tb-btn" id="btnNew">New</button>
@@ -906,7 +906,7 @@ async function savePdf(){
     const r = await fetch('/conveyor/screenshot', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ html, id: currentId })
+      body: JSON.stringify({ html, id: currentId, beta: true })
     });
     if(!r.ok){
       let msg = 'PDF save failed';
@@ -961,7 +961,7 @@ async function saveScreenshot(){
     const r = await fetch('/conveyor/screenshot', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ html, id: currentId })
+      body: JSON.stringify({ html, id: currentId, beta: true })
     });
     if(!r.ok){
       let msg = 'Screenshot save failed';
