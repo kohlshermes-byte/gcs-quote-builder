@@ -31,6 +31,9 @@
   .grp-head{font-size:10px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px}
   .grp-head::before{content:"";width:3px;height:12px;background:var(--red)}
   .row{display:flex;gap:10px;margin-bottom:10px}
+  input[type="file"].file-btn::file-selector-button{background:transparent;border:1px solid var(--line);color:var(--text);padding:8px 14px;border-radius:4px;font-size:12px;cursor:pointer;font-family:inherit}
+  input[type="file"].file-btn::file-selector-button:hover{border-color:var(--muted)}
+  input[type="file"].file-btn{color:var(--muted);font-size:12px}
   .fld{flex:1;min-width:0}
   label{display:block;font-size:10px;font-weight:bold;color:var(--muted);margin-bottom:4px;letter-spacing:.06em;text-transform:uppercase}
   input,textarea,select{width:100%;background:var(--field);border:1px solid transparent;border-radius:4px;color:var(--text);font-size:13px;padding:8px 10px;font-family:inherit}
@@ -95,7 +98,7 @@
 <div class="topbar">
   <div class="brand">
     <b><span style="color:#fff">GCS</span> <span style="color:var(--red)">Quote</span> <span style="color:#fff">Builder</span></b>
-    <small>Stage 1 Intake · Firecrawl Extract · Stage 2 Quote</small>
+    <small>Stage 1 Intake · Firecrawl Extract · Stage 2 Quote </small>
   </div>
   <div class="spacer"></div>
   <button class="tb-btn" id="btnNew">New</button>
@@ -145,6 +148,12 @@
       <div class="row">
         <div class="fld"><label>ZIP</label><input id="custZip"></div>
         <div class="fld"><label>Country</label><input id="custCountry"></div>
+      </div>
+      <div class="row">
+        <div class="fld"><label>Upload Image URL for Company Logo</label><input id="custLogoSite" placeholder="https://TheirWebsite.com/logo.png"></div>
+      </div>
+      <div class="row">
+        <div class="fld"><label>Upload image file for company logo</label><input id="custLogoFile" type="file" accept="image/*" class="file-btn"></div>
       </div>
     </div>
 
@@ -536,6 +545,12 @@ function fillCustomerFields(c){
   } else {
     resetPlaceholderField($('custCountry'), 'USA');
   }
+  if(c.logo_site){
+    $('custLogoSite').classList.remove('placeholder-text');
+    $('custLogoSite').value = c.logo_site;
+  } else {
+    resetPlaceholderField($('custLogoSite'), 'https://TheirWebsite.com/logo.png');
+  }
 }
 
 const STREET_ABBREVS = {
@@ -654,6 +669,7 @@ function stateFromForm(){
     state: $('custState').value.trim(),
     zip: $('custZip').value.trim(),
     country: readOptionalPlaceholderField($('custCountry')),
+    logo_site: readOptionalPlaceholderField($('custLogoSite')),
   };
   state.rep = {
     name: $('repName').value.trim(),
@@ -814,7 +830,8 @@ async function saveDraft(silent){
 
 async function extract(force){
   const listing = $('urlListing').value.trim();
-  if(!listing){ toast('Enter a conveyor listing URL'); return; }
+  const logoSite = (state.customer || {}).logo_site || (function(){ stateFromForm(); return (state.customer || {}).logo_site || ''; })();
+  if(!listing && !logoSite){ toast('Enter a conveyor listing URL'); return; }
   $('editor').classList.add('loading');
   $('extractStatus').className = 'status-bar';
   $('extractStatus').textContent = 'Extracting via Firecrawl…';
@@ -830,6 +847,8 @@ async function extract(force){
         force: !!force,
         custom_addons_required: false,
         quote_mode: 'listing_only',
+        beta: true,
+        logo_site: (state.customer || {}).logo_site || '',
       }),
     });
     const j = await r.json();
@@ -847,6 +866,13 @@ async function extract(force){
       $('extractStatus').className = 'status-bar ok';
       $('extractStatus').textContent = 'Extract complete — review fields below before building quote.';
     }
+    if(j.logo_status === 'found'){
+      $('extractStatus').textContent += ' Company logo found.';
+    } else if(j.logo_status === 'none'){
+      $('extractStatus').textContent += ' No company logo found (quote unchanged).';
+    } else if(j.logo_status && String(j.logo_status).indexOf('error:') === 0){
+      $('extractStatus').textContent += ' Logo lookup failed: ' + j.logo_status.slice(7);
+    }
     toast('Data extracted');
   } catch(e){
     $('extractStatus').className = 'status-bar error';
@@ -855,6 +881,27 @@ async function extract(force){
   } finally {
     $('editor').classList.remove('loading');
   }
+}
+
+async function uploadLogo(){
+  const fi = $('custLogoFile');
+  const f = fi.files && fi.files[0];
+  if(!f){ return; }
+  if(!currentId){ toast('Build or extract the quote first'); fi.value=''; return; }
+  const buf = await f.arrayBuffer();
+  let bin = '';
+  const bytes = new Uint8Array(buf);
+  for(let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+  const dataUri = 'data:' + (f.type || 'image/png') + ';base64,' + btoa(bin);
+  try {
+    const r = await fetch('/api/conveyor/logo',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: currentId, beta: true, data_uri: dataUri })});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || 'Upload failed');
+    toast('Logo uploaded — Build Quote to see it');
+  } catch(e){ toast(e.message || 'Logo upload failed'); }
+  fi.value='';
 }
 
 async function buildQuote(){
@@ -906,7 +953,7 @@ async function savePdf(){
     const r = await fetch('/conveyor/screenshot', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ html, id: currentId })
+      body: JSON.stringify({ html, id: currentId, beta: true })
     });
     if(!r.ok){
       let msg = 'PDF save failed';
@@ -961,7 +1008,7 @@ async function saveScreenshot(){
     const r = await fetch('/conveyor/screenshot', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ html, id: currentId })
+      body: JSON.stringify({ html, id: currentId, beta: true })
     });
     if(!r.ok){
       let msg = 'Screenshot save failed';
@@ -1077,11 +1124,14 @@ document.addEventListener('keydown',e=>{
 loadDefaults().then(()=>{
   syncCustomAddonsUI();
   bindPlaceholderField('custCountry');
+  bindPlaceholderField('custLogoSite');
+  $('custLogoFile').addEventListener('change', uploadLogo);
   bindPlaceholderField('liLead');
   bindPlaceholderField('totFreight');
   bindPlaceholderField('totTax');
   bindCustomPriceField('liAmount', syncCustomPriceFromAmount);
   bindCustomPriceField('totSub', syncCustomPriceFromSubtotal);
+  resetPlaceholderField($('custLogoSite'), 'https://TheirWebsite.com/logo.png');
   resetPlaceholderField($('custCountry'), 'USA');
   resetPlaceholderField($('liLead'), 'In Stock');
   resetPlaceholderField($('totFreight'), '$0');

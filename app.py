@@ -396,6 +396,21 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
             return self._conveyor_extract(data)
         if u.path == "/api/conveyor/render":
             return self._conveyor_render(data)
+        if u.path == "/api/conveyor/logo":
+            jdir = safe_job_dir((data or {}).get("id", ""))
+            if jdir is None:
+                return self._send(400, {"error": "save the quote first"})
+            uri = (data or {}).get("data_uri") or ""
+            if not uri.startswith("data:image/"):
+                return self._send(400, {"error": "bad image"})
+            try:
+                import base64 as _b64
+                import cust_logo
+                raw = _b64.b64decode(uri.split(",", 1)[1])
+                cust_logo.save_uploaded_image(raw, jdir)
+                return self._send(200, {"ok": True, "logo_status": "found"})
+            except Exception as e:
+                return self._send(500, {"error": str(e)})
         if u.path == "/conveyor/screenshot":
             return self._conveyor_screenshot(data)
         if u.path == "/api/delete":
@@ -465,9 +480,24 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
 
     def _conveyor_extract(self, data):
         import firecrawl_extract
+        self._is_beta_req = bool(data.get('beta'))
+        logo_site = (data.get('logo_site') or (data.get('customer') or {}).get('logo_site') or '').strip()
         urls = data.get('urls') or {}
         listing = (urls.get('listing') or '').strip()
         if not listing:
+            # Logo-only extract (no listing URL needed)
+            if logo_site:
+                jid = data.get('job_id')
+                jdir = safe_job_dir(jid) if jid else None
+                if not jdir:
+                    return self._send(400, {"error": "build or extract the quote first"})
+                try:
+                    import cust_logo
+                    if cust_logo.save_from_url(logo_site, jdir):
+                        return self._send(200, {"ok": True, "logo_status": "found", "_id": jid})
+                    return self._send(200, {"ok": True, "logo_status": "none", "_id": jid})
+                except Exception as e:
+                    return self._send(500, {"error": str(e)})
             return self._send(400, {"error": "listing URL is required"})
         request_quote = (urls.get('request_quote') or '').strip()
         custom_addons = bool(data.get('custom_addons_required'))
@@ -543,6 +573,20 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
                 json.dump(base, f, indent=2)
             out = dict(base)
             out['field_status'] = base.get('field_status')
+            if self._is_beta_req:
+                try:
+                    import beta_render
+                    if logo_site:
+                        import cust_logo
+                        if cust_logo.save_from_url(logo_site, jdir):
+                            out['logo_status'] = 'found'
+                        else:
+                            out['logo_status'] = 'none'
+                    else:
+                        beta_render.clear_logo(jdir)
+                        out['logo_status'] = 'none'
+                except Exception as le:
+                    out['logo_status'] = 'error: ' + str(le)
             return self._send(200, out)
         except Exception as e:
             return self._send(500, {"error": str(e)})
@@ -566,6 +610,13 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
         out_path = os.path.join(jdir, "GCS_Conveyor_Quote.html")
         try:
             conveyor_render.write_quote_html(quote_data, out_path)
+            if data.get('beta') or os.path.isfile(os.path.join(jdir, "cust_logo.png")):
+                import beta_render
+                with open(out_path, encoding='utf-8') as f:
+                    bh = f.read()
+                bh = beta_render.inject_logo(bh, jdir)
+                with open(out_path, 'w', encoding='utf-8') as f:
+                    f.write(bh)
             with open(jp, 'w', encoding='utf-8') as f:
                 json.dump(quote_data, f, indent=2)
             return self._send(200, {"ok": True, "id": jid, "html_path": out_path})
