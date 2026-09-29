@@ -578,8 +578,9 @@ def build_conveyor_pdf_reportlab(pdf_path, data, cache_dir=None):
         Spacer(1, 4),
         _p(
             "Equipment financing options available by request.<br/><br/>"
-            "No pre-payment penalty after 1 year.<br/><br/>"
-            "Visit GrinderCrusherScreen.com/pages/financing",
+            "Zero down and deferred payment options available.*<br/><br/>"
+            "Application link:<br/>"
+            "https://ridgestonecap.com/apply-now/grinder-crusher-screen/",
             10,
             GRAY,
         ),
