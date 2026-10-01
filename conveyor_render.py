@@ -60,10 +60,13 @@ def _format_component_money(val):
 
 
 def _format_total_money(val):
-    """Grand total: always show two decimal places."""
-    n = _parse_money(val)
+    """Grand total: always show two decimal places; blank when unset."""
+    text = str(val or "").strip()
+    if not text:
+        return ""
+    n = _parse_money(text)
     if n is None:
-        return "$0.00"
+        return ""
     return f"${n:,.2f}"
 
 

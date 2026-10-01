@@ -616,7 +616,7 @@ def field_status(parsed):
     }
 
 
-def refresh_quote_from_scrape(jdir, data):
+def refresh_quote_from_scrape(jdir, data, overwrite=False):
     """Re-merge listing + quote scrapes for custom build jobs."""
     import os
 
@@ -645,7 +645,12 @@ def refresh_quote_from_scrape(jdir, data):
             keep["lead_time"] = items[0]["lead_time"]
         if _meaningful_custom_price(items[0].get("amount")):
             keep["amount"] = items[0]["amount"]
-        items[0] = {**items[0], **mapped["line_items"][0], **keep}
+        new_item = dict(mapped["line_items"][0])
+        if not overwrite:
+            for key in ("model", "description"):
+                if str(items[0].get(key) or "").strip():
+                    new_item[key] = items[0][key]
+        items[0] = {**items[0], **new_item, **keep}
         items[0]["addons"] = saved_addons
         items[0]["addons_display"] = ""
     else:
@@ -659,7 +664,15 @@ def refresh_quote_from_scrape(jdir, data):
     saved_travel = details[0].get("travel") if details else ""
     saved_road = details[0].get("road_portable_option") if details else ""
     if details:
-        details[0] = {**details[0], **mapped["equipment_details"][0]}
+        new_eq = mapped["equipment_details"][0]
+        if overwrite:
+            details[0] = {**details[0], **new_eq}
+        else:
+            merged_eq = dict(details[0])
+            for key, val in new_eq.items():
+                if not str(merged_eq.get(key) or "").strip() and not isinstance(merged_eq.get(key), (list, tuple)):
+                    merged_eq[key] = val
+            details[0] = merged_eq
         if saved_travel and not parsed.get("travel"):
             details[0]["travel"] = saved_travel
         if saved_road and not parsed.get("road_portable_option"):

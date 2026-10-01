@@ -331,21 +331,39 @@ def is_sparse(parsed):
     return True
 
 
-def apply_parsed_to_quote(data, parsed):
-    """Merge freshly parsed listing data into a conveyor quote dict."""
+def _has_value(v):
+    """True for any non-empty scalar or bullet list."""
+    if isinstance(v, (list, tuple)):
+        return bool(v)
+    return bool(str(v or "").strip())
+
+
+def apply_parsed_to_quote(data, parsed, overwrite=False):
+    """Merge freshly parsed listing data into a conveyor quote dict.
+
+    overwrite=False (default): fill-only-empty — manual edits and previously
+    saved values are preserved; the scrape only supplies missing fields.
+    overwrite=True: scraped values replace existing ones (Re-extract).
+    """
     mapped = to_quote_fields(parsed)
     data = data or {}
 
     items = list(data.get("line_items") or [])
     new_li = mapped["line_items"][0]
     if items:
-        items[0] = {
-            **items[0],
-            "model": new_li["model"],
-            "description": new_li["description"],
-        }
-        if new_li.get("amount") and new_li["amount"] not in ("", "$0.00"):
-            items[0]["amount"] = new_li["amount"]
+        prev = items[0]
+        merged = dict(prev)
+        if overwrite or not _has_value(prev.get("model")):
+            merged["model"] = new_li["model"]
+        if overwrite or not _has_value(prev.get("description")):
+            merged["description"] = new_li["description"]
+        if (
+            new_li.get("amount")
+            and new_li["amount"] not in ("", "$0.00")
+            and (overwrite or not _has_value(prev.get("amount")))
+        ):
+            merged["amount"] = new_li["amount"]
+        items[0] = merged
     else:
         items = mapped["line_items"]
     data["line_items"] = items
@@ -353,7 +371,12 @@ def apply_parsed_to_quote(data, parsed):
     details = list(data.get("equipment_details") or [])
     new_eq = mapped["equipment_details"][0]
     if details:
-        details[0] = {**details[0], **new_eq}
+        prev_eq = details[0]
+        merged_eq = dict(prev_eq)
+        for key, val in new_eq.items():
+            if overwrite or not _has_value(prev_eq.get(key)):
+                merged_eq[key] = val
+        details[0] = merged_eq
     else:
         details = mapped["equipment_details"]
     data["equipment_details"] = details
@@ -375,7 +398,7 @@ def apply_parsed_to_quote(data, parsed):
     return data
 
 
-def refresh_quote_from_scrape(jdir, data):
+def refresh_quote_from_scrape(jdir, data, overwrite=False):
     """Re-parse jobs/<id>/scrape_listing.md with the latest parser rules."""
     data = data or {}
     if data.get("quote_mode") == "custom_build" or data.get("custom_addons_required"):
@@ -390,4 +413,4 @@ def refresh_quote_from_scrape(jdir, data):
     parsed = parse_listing_markdown(md)
     if is_sparse(parsed):
         return data
-    return apply_parsed_to_quote(data, parsed)
+    return apply_parsed_to_quote(data, parsed, overwrite=overwrite)

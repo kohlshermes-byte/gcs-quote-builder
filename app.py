@@ -46,19 +46,24 @@ JOB_ID_RE = re.compile(r'^\d{8}_\d{6}__[A-Za-z0-9_]+$')
 os.makedirs(JOBS_DIR, exist_ok=True)
 
 
-def refresh_conveyor_from_scrape(jdir, data):
-    """Always parse cached scrapes with the latest parser on disk."""
+def refresh_conveyor_from_scrape(jdir, data, overwrite=False):
+    """Always parse cached scrapes with the latest parser on disk.
+
+    overwrite=False (default) keeps manually edited / previously saved values
+    and only fills empty fields; overwrite=True re-applies the scrape in full
+    (explicit Re-extract).
+    """
     import importlib
 
     data = data or {}
     if data.get("quote_mode") == "custom_build" or data.get("custom_addons_required"):
         import custom_build_parser
         importlib.reload(custom_build_parser)
-        return custom_build_parser.refresh_quote_from_scrape(jdir, data)
+        return custom_build_parser.refresh_quote_from_scrape(jdir, data, overwrite=overwrite)
 
     import listing_parser
     importlib.reload(listing_parser)
-    return listing_parser.refresh_quote_from_scrape(jdir, data)
+    return listing_parser.refresh_quote_from_scrape(jdir, data, overwrite=overwrite)
 
 
 def safe_job_dir(jid):
@@ -328,7 +333,7 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
             if os.path.isfile(jp):
                 with open(jp, encoding='utf-8') as f:
                     data = json.load(f)
-                data = refresh_conveyor_from_scrape(jdir, data)
+                data = refresh_conveyor_from_scrape(jdir, data, overwrite=False)
                 return self._send(200, data)
             return self._send(404, {"error": "not found"})
         if u.path == "/api/jobs":
@@ -568,7 +573,7 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
                 fs['custom_addons'] = 'ok' if pasted_addons.strip() else 'missing'
                 base['field_status'] = fs
             base['scrape_meta'] = result.get('scrape_meta') or {}
-            base = refresh_conveyor_from_scrape(jdir, base)
+            base = refresh_conveyor_from_scrape(jdir, base, overwrite=bool(data.get('force')))
             with open(jp, 'w', encoding='utf-8') as f:
                 json.dump(base, f, indent=2)
             out = dict(base)

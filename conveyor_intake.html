@@ -280,7 +280,8 @@ function applyTotalsOnBuild(){
       subRaw = subFmt;
     }
   } else {
-    subRaw = subEl.value.trim();
+    /* Listing mode: fall back to the entered line Amount so the total computes */
+    subRaw = subEl.value.trim() || amountEl.value.trim();
   }
   const frEl = $('totFreight');
   const taxEl = $('totTax');
@@ -301,7 +302,9 @@ function applyTotalsOnBuild(){
   const frFmt = readMoneyPlaceholderField(frEl, '$0');
   const taxFmt = readMoneyPlaceholderField(taxEl, '$0');
   const grand = sub + fr + tax;
-  const grandFmt = (subRaw || !frPlaceholder || !taxPlaceholder) ? formatTotalMoney(String(grand)) : '';
+  /* Only show a grand total when the subtotal actually contains a number */
+  const subHasNumber = !!subRaw && /[0-9]/.test(String(subRaw).replace(/[$,\s]/g, ''));
+  const grandFmt = ((subHasNumber || fr || tax) && (subRaw || !frPlaceholder || !taxPlaceholder)) ? formatTotalMoney(String(grand)) : '';
   if(!isCustomBuild()) subEl.value = subFmt;
   $('totGrand').value = grandFmt;
   return {subtotal: subFmt, freight: frFmt, tax: taxFmt, grand_total: grandFmt};
@@ -322,6 +325,9 @@ let allJobs = [];
 let state = {};
 let currentId = null;
 let urlsChanged = false;
+/* Fields whose user-entered values must survive an Extract (merge-only).
+   Re-extract (force) intentionally overwrites them with fresh scrape data. */
+const PRESERVE_FIELD_IDS = ['custCompany','custContact','custEmail','custPhone','custStreet','custCity','custState','custZip','custCountry','custLogoSite','repName','repEmail','repPhone','liModel','liDesc','liAmount','liLead','totSub','totFreight','totTax','totGrand','eqName','eqDesc','eqFrame','eqIdlers','eqUndercarriage','eqBelt','eqOther','eqTravel','eqRoadPortable','eqPower','eqAddons','eqAssembly','eqImage','eqSpecs'];
 let fillingForm = false;
 let syncingCustomPrice = false;
 const CUSTOM_PRICE_PLACEHOLDER = 'Enter Custom Price';
@@ -836,6 +842,11 @@ async function extract(force){
   $('extractStatus').className = 'status-bar';
   $('extractStatus').textContent = 'Extracting via Firecrawl…';
   stateFromForm();
+  const preserve = !force;
+  const snap = {};
+  if(preserve){
+    PRESERVE_FIELD_IDS.forEach(id=>{ const el=$(id); if(el) snap[id] = {v: el.value, ph: el.classList.contains('placeholder-text')}; });
+  }
   try {
     const r = await fetch('/api/conveyor/extract',{
       method:'POST',
@@ -856,6 +867,11 @@ async function extract(force){
     Object.assign(state, j);
     if(j._id) currentId = j._id;
     fillForm(state);
+    if(preserve){
+      /* Restore anything the user had entered so the scrape only fills gaps */
+      PRESERVE_FIELD_IDS.forEach(id=>{ const s = snap[id]; const el = $(id); if(!s || !el) return; if(s.v && s.v.trim()){ el.value = s.v; el.classList.toggle('placeholder-text', s.ph); } });
+      stateFromForm();
+    }
     urlsChanged = false;
     $('btnReextract').disabled = false;
     const errs = (j.scrape_meta||{}).errors || [];
