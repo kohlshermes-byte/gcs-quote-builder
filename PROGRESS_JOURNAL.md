@@ -155,6 +155,7 @@ Two major phases were completed:
 | Session end | Validated TC3030 end-to-end; created this journal + `handoff.md` |
 | Later session | PREPARED BY → Sales Rep dropdown (REPS table in intake JS) w/ builder styling |
 | Later session | Removed "Custom Add-Ons Required" checkbox + paste box; added plain CUSTOM ADD-ONS textarea below Power (equipment_details.custom_addons), rendered in HTML + PDF. quote_mode now always listing_only |
+| 2026-10-28 | BETA logo STAMP tool: resizable/movable customer logo. beta_render.py dual-mode (legacy path byte-identical, verified vs job 20261027_235941__conveyor), strip FIXED at 70px (Cork Environmental reference), no-logo removes the whole strip, placement+filters in logo_settings.json, logo_enabled in conveyor.json, new endpoint /api/conveyor/logo-settings, beta_logo_ui.js Logo Studio panel (drag/resize/aspect-lock/snaps/filters incl. SVG sharpen), PDF export strips UI. Tested end-to-end on a sandbox copy (port 8766); production app untouched until restart |
 
 ---
 

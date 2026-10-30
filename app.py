@@ -416,6 +416,20 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
                 return self._send(200, {"ok": True, "logo_status": "found"})
             except Exception as e:
                 return self._send(500, {"error": str(e)})
+        if u.path == "/api/conveyor/logo-settings":
+            jdir = safe_job_dir((data or {}).get("id", ""))
+            if jdir is None:
+                return self._send(400, {"error": "bad id"})
+            try:
+                import beta_render
+                merged = beta_render.save_logo_settings(
+                    jdir,
+                    enabled=(data or {}).get("enabled"),
+                    settings=(data or {}).get("settings"),
+                )
+                return self._send(200, {"ok": True, "settings": merged})
+            except Exception as e:
+                return self._send(500, {"error": str(e)})
         if u.path == "/conveyor/screenshot":
             return self._conveyor_screenshot(data)
         if u.path == "/api/delete":
@@ -609,21 +623,26 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
             quote_data = json.load(f)
         # Allow inline updates from client before render
         for key in ('customer', 'rep', 'line_items', 'totals', 'equipment_details',
-                    'quote_num', 'quote_date', 'urls', 'quote_mode', 'custom_addons_required'):
+                    'quote_num', 'quote_date', 'urls', 'quote_mode',
+                    'custom_addons_required', 'logo_enabled'):
             if key in data:
                 quote_data[key] = data[key]
         out_path = os.path.join(jdir, "GCS_Conveyor_Quote.html")
         try:
             conveyor_render.write_quote_html(quote_data, out_path)
-            if data.get('beta') or os.path.isfile(os.path.join(jdir, "cust_logo.png")):
-                import beta_render
-                with open(out_path, encoding='utf-8') as f:
-                    bh = f.read()
-                bh = beta_render.inject_logo(bh, jdir)
-                with open(out_path, 'w', encoding='utf-8') as f:
-                    f.write(bh)
             with open(jp, 'w', encoding='utf-8') as f:
                 json.dump(quote_data, f, indent=2)
+            import beta_render
+            if (data.get('beta') or beta_render.is_beta_logo_job(jdir)
+                    or os.path.isfile(os.path.join(jdir, "cust_logo.png"))):
+                with open(out_path, encoding='utf-8') as f:
+                    bh = f.read()
+                bh = beta_render.inject_logo(
+                    bh, jdir,
+                    enabled=data.get('logo_enabled') if 'logo_enabled' in data else None,
+                )
+                with open(out_path, 'w', encoding='utf-8') as f:
+                    f.write(bh)
             return self._send(200, {"ok": True, "id": jid, "html_path": out_path})
         except Exception as e:
             return self._send(500, {"error": str(e)})
@@ -643,6 +662,13 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
         with open(jp, encoding='utf-8') as f:
             data = json.load(f)
         html_out = conveyor_render.render_quote_html(data)
+        try:
+            import beta_render
+            if (os.path.isfile(os.path.join(jdir, "cust_logo.png"))
+                    or beta_render.is_beta_logo_job(jdir)):
+                html_out = beta_render.inject_logo(html_out, jdir)
+        except Exception:
+            pass
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(html_out)
         return self._send(200, html_out, "text/html; charset=utf-8")

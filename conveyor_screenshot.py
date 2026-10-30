@@ -230,6 +230,11 @@ def build_screenshot_pdf(pdf_path, *, html, base_url):
                       box-shadow: none !important;
                       margin: 0 auto !important;
                     }
+                    /* Logo Studio chrome must never reach a PDF even if an
+                       un-cleaned preview DOM is posted (belt & suspenders —
+                       the normal export path strips it client-side). */
+                    .gcs-logo-ui { display: none !important; }
+                    img.cust-logo { outline: none !important; }
                     """
                 )
                 # Wait for logo / remote images to fully load

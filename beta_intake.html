@@ -154,6 +154,10 @@
       </div>
       <div class="row">
         <div class="fld"><label>Upload image file for company logo</label><input id="custLogoFile" type="file" accept="image/*" class="file-btn"></div>
+        <div class="fld"><label>Switch back to the URL logo</label><button id="btnRefetchLogo" class="tb-btn-ghost" type="button">Use URL logo</button></div>
+      </div>
+      <div class="row">
+        <div class="fld"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" id="logoEnabled" checked style="accent-color:#CC0000;width:15px;height:15px"> Include customer logo on the quote (uncheck = no logo strip at all)</label></div>
       </div>
     </div>
 
@@ -671,6 +675,7 @@ function stateFromForm(){
     country: readOptionalPlaceholderField($('custCountry')),
     logo_site: readOptionalPlaceholderField($('custLogoSite')),
   };
+  state.logo_enabled = $('logoEnabled').checked;
   state.rep = {
     name: $('repName').value.trim(),
     email: $('repEmail').value.trim(),
@@ -729,6 +734,7 @@ function fillForm(data){
   $('custEmail').value = c.email || '';
   $('custPhone').value = c.phone || '';
   fillCustomerFields(c);
+  $('logoEnabled').checked = data.logo_enabled !== false;
   const r = data.rep || {};
   $('repName').value = r.name || '';
   $('repEmail').value = r.email || '';
@@ -904,6 +910,30 @@ async function uploadLogo(){
   fi.value='';
 }
 
+async function refetchLogo(){
+  if(!currentId){ toast('Build or extract the quote first'); return; }
+  stateFromForm();
+  const logoSite = (state.customer || {}).logo_site || '';
+  if(!logoSite){ toast('Enter a logo URL in the URL field first'); return; }
+  const btn = $('btnRefetchLogo');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/conveyor/extract',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ job_id: currentId, beta: true, logo_site: logoSite })});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || 'Fetch failed');
+    if(j.logo_status === 'found'){
+      toast('URL logo restored — Build Quote to see it');
+    } else if(j.logo_status === 'none'){
+      toast('Could not fetch a logo from that URL — uploaded image kept');
+    } else {
+      toast('Logo fetch problem: ' + (j.logo_status || 'unknown'));
+    }
+  } catch(e){ toast(e.message || 'Logo fetch failed'); }
+  finally { btn.disabled = false; }
+}
+
 async function buildQuote(){
   applyTotalsOnBuild();
   formatLineAmountOnBuild();
@@ -945,7 +975,14 @@ async function savePdf(){
     toast('Preview not ready — build the quote first');
     return;
   }
-  const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  let html;
+  try {
+    html = frame.contentWindow.GCS_exportQuoteHTML
+      ? frame.contentWindow.GCS_exportQuoteHTML()
+      : ('<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
+  } catch(_e){
+    html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  }
   const btn = $('btnSavePdf');
   btn.disabled = true;
   toast('Building PDF…');
@@ -1000,7 +1037,14 @@ async function saveScreenshot(){
     toast('Preview not ready — build the quote first');
     return;
   }
-  const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  let html;
+  try {
+    html = frame.contentWindow.GCS_exportQuoteHTML
+      ? frame.contentWindow.GCS_exportQuoteHTML()
+      : ('<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
+  } catch(_e){
+    html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  }
   const btn = $('btnSaveScreenshot');
   btn.disabled = true;
   toast('Capturing screenshot PDF…');
@@ -1126,6 +1170,7 @@ loadDefaults().then(()=>{
   bindPlaceholderField('custCountry');
   bindPlaceholderField('custLogoSite');
   $('custLogoFile').addEventListener('change', uploadLogo);
+  $('btnRefetchLogo').addEventListener('click', refetchLogo);
   bindPlaceholderField('liLead');
   bindPlaceholderField('totFreight');
   bindPlaceholderField('totTax');
