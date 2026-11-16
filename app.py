@@ -416,6 +416,20 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
                 return self._send(200, {"ok": True, "logo_status": "found"})
             except Exception as e:
                 return self._send(500, {"error": str(e)})
+        if u.path == "/api/conveyor/machine-image":
+            jdir = safe_job_dir((data or {}).get("id", ""))
+            if jdir is None:
+                return self._send(400, {"error": "save the quote first"})
+            uri = (data or {}).get("data_uri") or ""
+            if not uri.startswith("data:image/"):
+                return self._send(400, {"error": "bad image"})
+            try:
+                import mach_image
+
+                mach_image.save_data_uri(uri, jdir)
+                return self._send(200, {"ok": True, "mach_image_status": "saved"})
+            except Exception as e:
+                return self._send(500, {"error": str(e)})
         if u.path == "/api/conveyor/logo-settings":
             jdir = safe_job_dir((data or {}).get("id", ""))
             if jdir is None:
@@ -624,14 +638,19 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
         # Allow inline updates from client before render
         for key in ('customer', 'rep', 'line_items', 'totals', 'equipment_details',
                     'quote_num', 'quote_date', 'urls', 'quote_mode',
-                    'custom_addons_required', 'logo_enabled'):
+                    'custom_addons_required', 'logo_enabled', 'mach_image_enabled'):
             if key in data:
                 quote_data[key] = data[key]
         out_path = os.path.join(jdir, "GCS_Conveyor_Quote.html")
         try:
-            conveyor_render.write_quote_html(quote_data, out_path)
+            # Persist the clean state first, then swap in the custom machine
+            # image (DATA URI) for rendering so the base64 never lands in
+            # conveyor.json.
             with open(jp, 'w', encoding='utf-8') as f:
                 json.dump(quote_data, f, indent=2)
+            import mach_image
+            mach_image.apply(quote_data, jdir)
+            conveyor_render.write_quote_html(quote_data, out_path)
             import beta_render
             if (data.get('beta') or beta_render.is_beta_logo_job(jdir)
                     or os.path.isfile(os.path.join(jdir, "cust_logo.png"))):
@@ -661,6 +680,11 @@ border-radius:8px;border:0;background:#C81010;color:#fff;font-size:1rem;cursor:p
         import conveyor_render
         with open(jp, encoding='utf-8') as f:
             data = json.load(f)
+        try:
+            import mach_image
+            mach_image.apply(data, jdir)
+        except Exception:
+            pass
         html_out = conveyor_render.render_quote_html(data)
         try:
             import beta_render

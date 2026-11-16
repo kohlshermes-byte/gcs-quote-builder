@@ -339,6 +339,15 @@ def _resolve_equipment_image(image_url, cache_dir):
     if os.path.isfile(url):
         return url
 
+    if url.startswith("data:image/"):
+        import base64
+
+        dest = os.path.join(cache_dir or os.path.join(BASE, "jobs"),
+                            "equipment_machimage.png")
+        with open(dest, "wb") as f:
+            f.write(base64.b64decode(url.split(",", 1)[1]))
+        return dest
+
     cache_dir = cache_dir or os.path.join(BASE, "jobs")
     os.makedirs(cache_dir, exist_ok=True)
 

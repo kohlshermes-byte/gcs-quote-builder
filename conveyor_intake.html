@@ -149,6 +149,10 @@
         <div class="fld"><label>ZIP</label><input id="custZip"></div>
         <div class="fld"><label>Country</label><input id="custCountry"></div>
       </div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">Photos</div>
       <div class="row">
         <div class="fld"><label>Upload Image URL for Company Logo</label><input id="custLogoSite" placeholder="https://TheirWebsite.com/logo.png"></div>
       </div>
@@ -158,6 +162,10 @@
       </div>
       <div class="row">
         <div class="fld"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" id="logoEnabled" checked style="accent-color:#CC0000;width:15px;height:15px"> Include customer logo on the quote (uncheck = no logo strip at all)</label></div>
+      </div>
+      <div class="row">
+        <div class="fld"><label>Upload custom machine image</label><input id="machImgFile" type="file" accept="image/*" class="file-btn"></div>
+        <div class="fld"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" id="machImgEnabled" style="accent-color:#CC0000;width:15px;height:15px"> Use custom image</label></div>
       </div>
     </div>
 
@@ -682,6 +690,7 @@ function stateFromForm(){
     logo_site: readOptionalPlaceholderField($('custLogoSite')),
   };
   state.logo_enabled = $('logoEnabled').checked;
+  state.mach_image_enabled = $('machImgEnabled').checked;
   state.rep = {
     name: $('repName').value.trim(),
     email: $('repEmail').value.trim(),
@@ -741,6 +750,7 @@ function fillForm(data){
   $('custPhone').value = c.phone || '';
   fillCustomerFields(c);
   $('logoEnabled').checked = data.logo_enabled !== false;
+  $('machImgEnabled').checked = !!data.mach_image_enabled;
   const r = data.rep || {};
   $('repName').value = r.name || '';
   $('repEmail').value = r.email || '';
@@ -948,6 +958,27 @@ async function refetchLogo(){
     }
   } catch(e){ toast(e.message || 'Logo fetch failed'); }
   finally { btn.disabled = false; }
+}
+
+async function uploadMachImage(){
+  const fi = $('machImgFile');
+  const f = fi.files && fi.files[0];
+  if(!f){ return; }
+  if(!currentId){ toast('Build or extract the quote first'); fi.value=''; return; }
+  const buf = await f.arrayBuffer();
+  let bin = '';
+  const bytes = new Uint8Array(buf);
+  for(let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+  const dataUri = 'data:' + (f.type || 'image/png') + ';base64,' + btoa(bin);
+  try {
+    const r = await fetch('/api/conveyor/machine-image',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: currentId, data_uri: dataUri })});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || 'Upload failed');
+    toast('Machine image uploaded - check Use custom image and Build Quote to see it');
+  } catch(e){ toast(e.message || 'Machine image upload failed'); }
+  fi.value='';
 }
 
 async function buildQuote(){
@@ -1186,6 +1217,7 @@ loadDefaults().then(()=>{
   bindPlaceholderField('custCountry');
   bindPlaceholderField('custLogoSite');
   $('custLogoFile').addEventListener('change', uploadLogo);
+  $('machImgFile').addEventListener('change', uploadMachImage);
   $('btnRefetchLogo').addEventListener('click', refetchLogo);
   bindPlaceholderField('liLead');
   bindPlaceholderField('totFreight');
