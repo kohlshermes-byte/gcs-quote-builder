@@ -105,8 +105,7 @@
   <button class="tb-btn" id="btnJobs">Saved Quotes</button>
   <button class="tb-btn" id="btnSave">Save Draft</button>
   <button class="tb-btn primary" id="btnBuild">Build Quote</button>
-  <button class="tb-btn primary" id="btnSavePdf" disabled>Save PDF</button>
-  <button class="tb-btn primary" id="btnSaveScreenshot" disabled>Save Screenshot</button>
+  <button class="tb-btn primary" id="btnSaveScreenshot" disabled>Save PDF</button>
 </div>
 
 <div class="stage">
@@ -179,6 +178,7 @@
           <option value="Alex Laldin">Alex Laldin</option>
           <option value="Rick Cohen">Rick Cohen</option>
           <option value="Daniel Ferdinand">Daniel Ferdinand</option>
+          <option value="Andrew Lee">Andrew Lee</option>
         </select>
       </div>
       <input type="hidden" id="repName">
@@ -728,6 +728,7 @@ const REPS = {
   'Alex Laldin':      { name: 'Alex Laldin',      email: 'Alex@GrinderCrusherScreen.com',   phone: '770-343-2867' },
   'Rick Cohen':       { name: 'Rick Cohen',       email: 'Rick@GrinderCrusherScreen.com',   phone: '770-282-8618' },
   'Daniel Ferdinand': { name: 'Daniel Ferdinand', email: 'Daniel@GrinderCrusherScreen.com', phone: '470-458-9313' },
+  'Andrew Lee':       { name: 'Andrew Lee',       email: 'Andrew@GrinderCrusherScreen.com', phone: '470-616-7090' },
 };
 $('repSelect').addEventListener('change', () => {
   const rep = REPS[$('repSelect').value] || { name: '', email: '', phone: '' };
@@ -808,7 +809,6 @@ function clearPreview(){
   frame.src = 'about:blank';
   frame.style.display = 'none';
   $('previewPlaceholder').style.display = '';
-  $('btnSavePdf').disabled = true;
   $('btnSaveScreenshot').disabled = true;
 }
 
@@ -995,7 +995,6 @@ async function buildQuote(){
     $('previewFrame').src = '/conveyor/quote?id=' + encodeURIComponent(currentId) + '&t=' + Date.now();
     $('previewFrame').style.display = 'block';
     $('previewPlaceholder').style.display = 'none';
-    $('btnSavePdf').disabled = false;
     $('btnSaveScreenshot').disabled = false;
     $('extractStatus').className = 'status-bar ok';
     $('extractStatus').textContent = 'Quote built — preview updated.';
@@ -1006,67 +1005,6 @@ async function buildQuote(){
   }
 }
 
-async function savePdf(){
-  if(!currentId){
-    toast('Build the quote first');
-    return;
-  }
-  const frame = $('previewFrame');
-  let doc;
-  try {
-    doc = frame.contentDocument || frame.contentWindow.document;
-  } catch(_e){
-    doc = null;
-  }
-  if(!doc || !doc.documentElement){
-    toast('Preview not ready — build the quote first');
-    return;
-  }
-  let html;
-  try {
-    html = frame.contentWindow.GCS_exportQuoteHTML
-      ? frame.contentWindow.GCS_exportQuoteHTML()
-      : ('<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
-  } catch(_e){
-    html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-  }
-  const btn = $('btnSavePdf');
-  btn.disabled = true;
-  toast('Building PDF…');
-  try {
-    const r = await fetch('/conveyor/screenshot', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ html, id: currentId, beta: true })
-    });
-    if(!r.ok){
-      let msg = 'PDF save failed';
-      try {
-        const j = await r.json();
-        if(j.error) msg = j.error;
-      } catch(_e){}
-      throw new Error(msg);
-    }
-    const blob = await r.blob();
-    const dispo = r.headers.get('Content-Disposition') || '';
-    const match = dispo.match(/filename=\"?([^\";]+)\"?/i);
-    let filename = match ? match[1] : 'GCS_Quote.pdf';
-    filename = filename.replace('_screenshot', '');
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    toast('PDF saved');
-  } catch(e){
-    toast(e.message || 'PDF save failed');
-  } finally {
-    btn.disabled = false;
-  }
-}
 
 async function saveScreenshot(){
   if(!currentId){
@@ -1112,7 +1050,8 @@ async function saveScreenshot(){
     const blob = await r.blob();
     const dispo = r.headers.get('Content-Disposition') || '';
     const match = dispo.match(/filename=\"?([^\";]+)\"?/i);
-    const filename = match ? match[1] : 'GCS_Quote.pdf';
+    let filename = match ? match[1] : 'GCS_Quote.pdf';
+    filename = filename.replace('_screenshot', '');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1121,7 +1060,7 @@ async function saveScreenshot(){
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    toast('Screenshot PDF saved');
+    toast('PDF saved');
   } catch(e){
     toast(e.message || 'Screenshot save failed');
   } finally {
@@ -1136,7 +1075,6 @@ $('btnExtract').addEventListener('click',()=>extract(false));
 $('btnReextract').addEventListener('click',()=>extract(true));
 $('btnSave').addEventListener('click',()=>saveDraft(false));
 $('btnBuild').addEventListener('click',buildQuote);
-$('btnSavePdf').addEventListener('click',savePdf);
 $('btnSaveScreenshot').addEventListener('click',saveScreenshot);
 $('btnNew').addEventListener('click',()=>{ if(confirm('Start a new conveyor quote?')) loadDefaults(); });
 
